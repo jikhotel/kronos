@@ -1,3 +1,12 @@
+Changes：
+
+1. 调整k线图展示，支持缩放，区间选择，增加成交量
+2. 调整历史数据，预测数据选择，支持预测功能
+3. 增加选股器，连接腾讯获取实时数据
+4. 增加分钟k线预测
+5. 修复页面显示bug，选股下拉问题，数据修改
+
+
 <div align="center">
   <h2><b>Kronos: A Foundation Model for the Language of Financial Markets </b></h2>
 </div>
