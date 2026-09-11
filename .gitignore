@@ -1,0 +1,92 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Data files (large files)
+*.feather
+*.parquet
+*.h5
+*.hdf5
+
+# Model files (large files)
+*.pth
+*.pt
+*.ckpt
+*.bin
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+.python-version
+
+# --- Kronos local additions ---
+# Binary images (cannot be reliably synced via text API; regenerable from code)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.bmp
+*.svg
+
+# Oversized 5-min sample CSVs (>5MB) — keep repo lean; daily CSVs are included
+data/HK_ali_09988_kline_5min_all.csv
+finetune_csv/data/HK_ali_09988_kline_5min_all.csv
+finetune_csv/examples/
+examples/yuce/
