@@ -204,6 +204,38 @@
             height: 600px;
         }
 
+        /* 图表上方: 同花顺风格 + 下方参考指标选择器 */
+        .chart-toolbar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 10px 14px;
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+        .chart-toolbar label {
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 14px;
+        }
+        .chart-toolbar select {
+            width: auto;
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #fff;
+        }
+        .chart-toolbar select:focus { outline: none; border-color: #667eea; }
+        .chart-toolbar .form-text { margin: 0; }
+        .chart-toolbar .badge-style {
+            color: #EF4136;
+            font-weight: 700;
+        }
+
         .data-info {
             background: #f7fafc;
             border: 1px solid #e2e8f0;
@@ -555,7 +587,7 @@
                 <div class="form-group">
                     <label for="device-select">Select Device:</label>
                     <select id="device-select">
-                        <option value="cpu">CPU</option>
+                        <option value="cpu" selected>CPU</option>
                         <option value="cuda">CUDA (NVIDIA GPU)</option>
                         <option value="mps">MPS (Apple Silicon)</option>
                     </select>
@@ -715,6 +747,19 @@
 
             <div class="chart-container">
                 <h2>📈 Prediction Results Chart</h2>
+
+                <!-- 图表上方工具栏: 同花顺风格 + 下方参考指标选择器 -->
+                <div class="chart-toolbar" id="chart-toolbar" style="display:none;">
+                    <span class="badge-style">同花顺风格</span>
+                    <label for="lower-indicator">下方参考指标:</label>
+                    <select id="lower-indicator">
+                        <option value="volume">成交量</option>
+                        <option value="amount">成交额</option>
+                        <option value="turnover">换手率</option>
+                    </select>
+                    <small class="form-text">切换指标仅重绘图表，不重新运行模型</small>
+                </div>
+
                 <div id="chart"></div>
                 
                 <!-- Comparison Analysis -->
@@ -776,6 +821,7 @@
         let currentDataInfo = null;
         let availableModels = [];
         let modelLoaded = false;
+        let currentLowerIndicator = 'volume';   // 当前下方参考指标
 
         // Initialize after page loads
         document.addEventListener('DOMContentLoaded', function() {
@@ -830,6 +876,11 @@
                 option.textContent = `${model.name} (${model.params}) - ${model.description}`;
                 modelSelect.appendChild(option);
             });
+
+            // 默认选中 kronos-base
+            if (availableModels['kronos-base']) {
+                modelSelect.value = 'kronos-base';
+            }
         }
 
         // Load model
@@ -1338,12 +1389,52 @@
                 displaylogo: false,
                 modeBarButtonsToRemove: ['select2d', 'lasso2d']
             });
-            
+
+            // 配置下方参考指标选择器(根据数据实际可用列展示)
+            setupLowerIndicatorSelector(result);
+
             // Display comparison analysis (if actual data exists)
             if (result.has_comparison) {
                 displayComparisonAnalysis(result);
             } else {
                 document.getElementById('comparison-section').style.display = 'none';
+            }
+        }
+
+        // 根据后端返回的可用指标初始化下方参考指标下拉框
+        const IND_LABEL = { volume: '成交量', amount: '成交额', turnover: '换手率' };
+        function setupLowerIndicatorSelector(result) {
+            const avail = (result && result.available_indicators) || ['volume'];
+            const sel = document.getElementById('lower-indicator');
+            sel.innerHTML = avail.map(k =>
+                `<option value="${k}">${IND_LABEL[k] || k}</option>`
+            ).join('');
+            currentLowerIndicator = (result && result.lower_indicator) || 'volume';
+            if (avail.includes(currentLowerIndicator)) {
+                sel.value = currentLowerIndicator;
+            }
+            document.getElementById('chart-toolbar').style.display = 'flex';
+        }
+
+        // 仅切换下方参考指标, 调用 /api/render-chart 免重算重绘
+        async function renderChartWithIndicator(indicator) {
+            try {
+                const res = await axios.post('/api/render-chart', { lower_indicator: indicator });
+                if (res.data.success) {
+                    const chartData = JSON.parse(res.data.chart);
+                    Plotly.react('chart', chartData.data, chartData.layout, {
+                        scrollZoom: true,
+                        responsive: true,
+                        displaylogo: false,
+                        modeBarButtonsToRemove: ['select2d', 'lasso2d']
+                    });
+                    currentLowerIndicator = indicator;
+                } else {
+                    showStatus('error', res.data.error || '重绘失败');
+                }
+            } catch (e) {
+                console.error('重绘失败', e);
+                showStatus('error', `重绘失败: ${e.response?.data?.error || e.message}`);
             }
         }
 
@@ -1446,6 +1537,12 @@
             // Update slider when lookback window size changes
             document.getElementById('lookback').addEventListener('input', updateSliderFromInputs);
             document.getElementById('pred-len').addEventListener('input', updateSliderFromInputs);
+
+            // 下方参考指标切换: 仅重绘, 不重跑模型
+            document.getElementById('lower-indicator').addEventListener('change', function() {
+                if (!this.value) return;
+                renderChartWithIndicator(this.value);
+            });
 
             // Prediction mode switch: update hint + slider relevance
             const modeSel = document.getElementById('prediction-mode');

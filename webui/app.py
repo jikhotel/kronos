@@ -32,6 +32,9 @@ tokenizer = None
 model = None
 predictor = None
 
+# 最近一次预测的图表上下文(用于不重跑模型、仅切换下方参考指标时重绘)
+LAST_CHART_CTX = {}
+
 # Available model configurations
 AVAILABLE_MODELS = {
     'kronos-mini': {
@@ -116,6 +119,10 @@ def load_data_file(file_path):
         # Process amount column (optional, but not used for prediction)
         if 'amount' in df.columns:
             df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
+
+        # Process turnover (换手率) column (optional)
+        if 'turnover' in df.columns:
+            df['turnover'] = pd.to_numeric(df['turnover'], errors='coerce')
         
         # Remove rows containing NaN values
         df = df.dropna()
@@ -321,15 +328,41 @@ def _vol_colors(frame):
             for o, c in zip(frame['open'], frame['close'])]
 
 
+def _fmt_label(ts):
+    """时间戳转成连续 K 线所需的字符串标签(去除周末/节假日空白)。
+
+    日/周/月线只保留日期; 分钟/小时线含时间。用于 X 轴改为 category 类型,
+    使每根 K 线等距排列, 不再因非交易日产生空白断档。"""
+    ts = pd.Timestamp(ts)
+    if ts == ts.normalize():
+        return ts.strftime('%Y-%m-%d')
+    return ts.strftime('%Y-%m-%d %H:%M')
+
+
+def _to_labels(seq):
+    """将 x 坐标序列(时间戳或整数索引)统一转为绘图用标签"""
+    return [_fmt_label(t) if not isinstance(t, (int, np.integer)) else t for t in seq]
+
+
 def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
-                            historical_start_idx=0, pred_timestamps=None, mode='forecast'):
-    """Create prediction chart (K线 + 下方成交量子图)"""
+                            historical_start_idx=0, pred_timestamps=None, mode='forecast',
+                            lower_indicator='volume'):
+    """Create prediction chart (同花顺风格 K线 + 下方可选参考指标子图)"""
     # 取 lookback 根历史数据; forecast 模式下 historical_start_idx 指向末尾, 即最新的一段
     start = max(0, min(historical_start_idx, max(0, len(df) - 1)))
     historical_df = df.iloc[start:start + lookback]
 
-    has_vol = 'volume' in historical_df.columns and bool(historical_df['volume'].notna().any())
-    if has_vol:
+    # ---- 下方参考指标选择 (成交量 / 成交额 / 换手率) ----
+    IND_MAP = {'volume': '成交量', 'amount': '成交额', 'turnover': '换手率'}
+    ind_col = lower_indicator if lower_indicator in IND_MAP else 'volume'
+    has_lower = ind_col in historical_df.columns and bool(historical_df[ind_col].notna().any())
+    if not has_lower:
+        # 该列缺失(旧数据/港股估算)时退回成交量
+        ind_col = 'volume'
+        has_lower = 'volume' in historical_df.columns and bool(historical_df['volume'].notna().any())
+    ind_label = IND_MAP.get(ind_col, '成交量')
+
+    if has_lower:
         fig = make_subplots(
             rows=2, cols=1, shared_xaxes=True,
             row_heights=[0.72, 0.28], vertical_spacing=0.04
@@ -338,7 +371,9 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
         fig = go.Figure()
 
     def _x_of(frame):
-        return frame['timestamps'] if 'timestamps' in frame.columns else frame.index
+        if 'timestamps' in frame.columns:
+            return [_fmt_label(t) for t in frame['timestamps']]
+        return list(frame.index)
 
     # ---- 主图: K 线 (row=1) ----
     fig.add_trace(go.Candlestick(
@@ -355,10 +390,11 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
         if pred_timestamps is None:
             pred_timestamps = range(len(historical_df), len(historical_df) + len(pred_df))
         pred_timestamps = list(pred_timestamps)[:len(pred_df)]
+        pred_x = _to_labels(pred_timestamps)
 
         pred_label = 'Future Forecast' if mode == 'forecast' else 'Prediction Data'
         fig.add_trace(go.Candlestick(
-            x=pred_timestamps,
+            x=pred_x,
             open=pred_df['open'], high=pred_df['high'],
             low=pred_df['low'], close=pred_df['close'],
             name=f'{pred_label} ({len(pred_df)} points)',
@@ -369,7 +405,7 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
         # 历史与未来之间画一条分界线
         if len(historical_df) > 0 and 'timestamps' in historical_df.columns:
             fig.add_vline(
-                x=historical_df['timestamps'].iloc[-1],
+                x=_fmt_label(historical_df['timestamps'].iloc[-1]),
                 line_width=1, line_dash='dash', line_color='#9E9E9E',
                 row=1, col=1
             )
@@ -379,8 +415,9 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
         actual_timestamps = (list(pred_timestamps)[:len(actual_df)]
                              if pred_timestamps is not None
                              else range(len(historical_df), len(historical_df) + len(actual_df)))
+        actual_x = _to_labels(actual_timestamps)
         fig.add_trace(go.Candlestick(
-            x=actual_timestamps,
+            x=actual_x,
             open=actual_df['open'], high=actual_df['high'],
             low=actual_df['low'], close=actual_df['close'],
             name=f'Actual Data ({len(actual_df)} points)',
@@ -388,26 +425,34 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
         decreasing_line_color=DOWN_COLOR, decreasing_fillcolor=DOWN_COLOR
         ), row=1, col=1)
 
-    # ---- 副图: 成交量 (row=2) ----
-    if has_vol:
+    # ---- 副图: 可选参考指标 (row=2) ----
+    if has_lower:
+        if ind_col == 'amount':
+            hovertpl = '%{x}<br>成交额: %{y:,.0f}<extra></extra>'
+        elif ind_col == 'turnover':
+            hovertpl = '%{x}<br>换手率: %{y:.2f}%<extra></extra>'
+        else:
+            hovertpl = '%{x}<br>成交量: %{y:,.0f}<extra></extra>'
+
         fig.add_trace(go.Bar(
             x=_x_of(historical_df),
-            y=historical_df['volume'],
+            y=historical_df[ind_col],
             marker_color=_vol_colors(historical_df),
-            name='Volume', showlegend=False,
-            hovertemplate='%{x}<br>Vol: %{y:,.0f}<extra></extra>'
+            name=ind_label, showlegend=False,
+            hovertemplate=hovertpl
         ), row=2, col=1)
 
-        if actual_df is not None and len(actual_df) > 0 and 'volume' in actual_df.columns:
+        if actual_df is not None and len(actual_df) > 0 and ind_col in actual_df.columns:
             actual_timestamps = (list(pred_timestamps)[:len(actual_df)]
                                  if pred_timestamps is not None
                                  else range(len(historical_df), len(historical_df) + len(actual_df)))
+            actual_x = _to_labels(actual_timestamps)
             fig.add_trace(go.Bar(
-                x=actual_timestamps,
-                y=actual_df['volume'],
+                x=actual_x,
+                y=actual_df[ind_col],
                 marker_color=_vol_colors(actual_df),
-                name='Actual Volume', showlegend=False,
-                hovertemplate='%{x}<br>Vol: %{y:,.0f}<extra></extra>'
+                name=f'Actual {ind_label}', showlegend=False,
+                hovertemplate=hovertpl
             ), row=2, col=1)
 
     # ---- 布局 ----
@@ -419,7 +464,7 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
 
     fig.update_layout(
         title=title,
-        xaxis_title='Time',
+        xaxis_title='交易日',
         yaxis_title='Price',
         template='plotly_white',
         height=720,
@@ -427,22 +472,20 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
         dragmode='pan',          # 左键拖动 = 左右平移
         margin=dict(l=30, r=65, t=60, b=45)   # 右轴留宽: 价格/成交量刻度置于右侧(同花顺风格)
     )
-    # 同花顺风格: 价格轴与成交量轴均置于右侧
+    # 同花顺风格: 价格轴与参考指标轴均置于右侧
     fig.update_yaxes(side='right')
-    if has_vol:
-        fig.update_yaxes(title_text='Volume', row=2, col=1)
+    if has_lower:
+        fig.update_yaxes(title_text=ind_label, row=2, col=1)
 
-    # x 轴范围 + 同步缩放/平移 (共享 x 轴使上下两图联动)
-    if 'timestamps' in historical_df.columns:
-        all_timestamps = [pd.Timestamp(t) for t in historical_df['timestamps']]
-        if pred_timestamps is not None:
-            all_timestamps.extend(pd.Timestamp(t) for t in pred_timestamps)
-        all_timestamps = sorted(all_timestamps)
-        fig.update_xaxes(
-            range=[all_timestamps[0], all_timestamps[-1]],
-            rangeslider_visible=False,
-            type='date'
-        )
+    # x 轴: 改用 category 类型, 去掉周末/节假日的空白, K 线连续排列(无断档)
+    # 注意: category 轴不要显式设置字符串 range, 否则 Plotly 会解析失败,
+    # 导致只显示前几个 category。让 Plotly 自动显示所有 categories 即可。
+    fig.update_xaxes(
+        rangeslider_visible=False,
+        type='category',
+        tickangle=-45,
+        nticks=30
+    )
 
     return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
@@ -585,11 +628,13 @@ def fetch_stock():
 @app.route('/api/predict', methods=['POST'])
 def predict():
     """Perform prediction"""
+    global LAST_CHART_CTX
     try:
         data = request.get_json()
         file_path = data.get('file_path')
         lookback = int(data.get('lookback', 400))
         pred_len = int(data.get('pred_len', 120))
+        lower_indicator = data.get('lower_indicator', 'volume')
         
         # Get prediction quality parameters
         temperature = float(data.get('temperature', 1.0))
@@ -603,6 +648,13 @@ def predict():
         df, error = load_data_file(file_path)
         if error:
             return jsonify({'error': error}), 400
+
+        # 可用的下方参考指标(旧数据/港股估算可能缺成交额、换手率)
+        available_indicators = ['volume']
+        if 'amount' in df.columns and float(df['amount'].abs().sum()) > 0:
+            available_indicators.append('amount')
+        if 'turnover' in df.columns and float(df['turnover'].abs().sum()) > 0:
+            available_indicators.append('turnover')
         
         if len(df) < lookback:
             return jsonify({'error': f'Insufficient data length, need at least {lookback} rows'}), 400
@@ -712,8 +764,23 @@ def predict():
         
         chart_json = create_prediction_chart(
             df, pred_df, lookback, pred_len, actual_df,
-            historical_start_idx, pred_timestamps=future_timestamps, mode=mode
+            historical_start_idx, pred_timestamps=future_timestamps, mode=mode,
+            lower_indicator=lower_indicator
         )
+
+        # 记录上下文, 供 /api/render-chart 免重算切换下方指标
+        LAST_CHART_CTX = {
+            'df': df,
+            'pred_df': pred_df,
+            'actual_df': actual_df,
+            'historical_start_idx': historical_start_idx,
+            'pred_timestamps': future_timestamps,
+            'mode': mode,
+            'lookback': lookback,
+            'pred_len': pred_len,
+            'lower_indicator': lower_indicator,
+            'available': available_indicators,
+        }
         
         prediction_results = []
         for i, (_, row) in enumerate(pred_df.iterrows()):
@@ -764,11 +831,36 @@ def predict():
             'prediction_results': prediction_results,
             'actual_data': actual_data,
             'has_comparison': len(actual_data) > 0,
+            'available_indicators': available_indicators,
+            'lower_indicator': lower_indicator,
             'message': message
         })
         
     except Exception as e:
         return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+
+@app.route('/api/render-chart', methods=['POST'])
+def render_chart():
+    """在不重新调用模型的前提下, 仅切换下方参考指标并重绘图表"""
+    global LAST_CHART_CTX
+    if not LAST_CHART_CTX:
+        return jsonify({'error': '尚无预测结果, 请先运行一次预测'}), 400
+    try:
+        data = request.get_json(silent=True) or {}
+        indicator = data.get('lower_indicator', LAST_CHART_CTX.get('lower_indicator', 'volume'))
+        chart_json = create_prediction_chart(
+            LAST_CHART_CTX['df'], LAST_CHART_CTX['pred_df'],
+            LAST_CHART_CTX['lookback'], LAST_CHART_CTX['pred_len'],
+            LAST_CHART_CTX['actual_df'],
+            LAST_CHART_CTX['historical_start_idx'],
+            pred_timestamps=LAST_CHART_CTX['pred_timestamps'],
+            mode=LAST_CHART_CTX['mode'],
+            lower_indicator=indicator
+        )
+        return jsonify({'success': True, 'chart': chart_json, 'lower_indicator': indicator})
+    except Exception as e:
+        return jsonify({'error': f'重绘失败: {str(e)}'}), 500
+
 
 @app.route('/api/load-model', methods=['POST'])
 def load_model():

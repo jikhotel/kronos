@@ -15,7 +15,8 @@
 --freq 可选: day(默认) week month m1 m5 m15 m30 m60
 --fq   可选: qfq(默认,前复权) hfq(后复权) none(不复权)
 
-输出列: timestamps,open,high,low,close,volume,amount
+输出列: timestamps,open,high,low,close,volume,amount,turnover
+(成交额/换手率默认 0, 由东方财富接口补齐; 失败则按 成交量×均价 估算)
 """
 
 import argparse
@@ -36,6 +37,13 @@ FREQ_MAP = {"day": "day", "week": "week", "month": "month",
 FREQ_CN = {"day": "日线", "week": "周线", "month": "月线",
            "m1": "1分钟", "m5": "5分钟", "m15": "15分钟", "m30": "30分钟", "m60": "60分钟"}
 FQ_CN = {"qfq": "前复权", "hfq": "后复权", "none": "不复权"}
+
+# 东方财富历史 K 线(补齐腾讯不提供的 成交额 / 换手率)
+EM_API = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+EM_KLT = {"day": "101", "week": "102", "month": "103",
+          "m1": "1", "m5": "5", "m15": "15", "m30": "30", "m60": "60"}
+EM_FQT = {"qfq": "1", "hfq": "2", "none": "0"}   # 不复权=0
+EM_MARKET = {"sh": "1", "sz": "0", "bj": "0"}      # 港股走近似估算, 不走东财
 
 
 def symbol_of(code: str) -> str:
@@ -111,6 +119,50 @@ def fetch_all(symbol: str, freq: str, fq: str, start: date, end: date):
     return rows
 
 
+def _eastmoney_secid(symbol: str) -> str | None:
+    """腾讯代码 -> 东方财富 secid; 港股等不支持时返回 None(改用估算)"""
+    mkt = symbol[:2]
+    code = symbol[2:]
+    if mkt in EM_MARKET:
+        return f"{EM_MARKET[mkt]}.{code}"
+    return None
+
+
+def fetch_em_indicators(symbol: str, freq: str, fq: str) -> dict:
+    """抓取东方财富历史 K 线, 返回 {datetime_str: (成交额元, 换手率%)}。
+    用于补全省花钱线接口不提供的成交额/换手率; 失败返回空 dict。"""
+    secid = _eastmoney_secid(symbol)
+    if not secid:
+        return {}
+    klt = EM_KLT.get(freq, "101")
+    fqt = EM_FQT.get(fq, "1")
+    try:
+        r = requests.get(EM_API, params={
+            "secid": secid,
+            "fields1": "f1,f2,f3",
+            "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+            "klt": klt, "fqt": fqt, "beg": "0", "end": "20500101"
+        }, timeout=30, headers=UA)
+        r.raise_for_status()
+        data = r.json().get("data")
+        if not data or not data.get("klines"):
+            return {}
+        out = {}
+        for line in data["klines"]:
+            parts = line.split(",")
+            if len(parts) < 11:
+                continue
+            dt, amount, turnover = parts[0], parts[6], parts[10]
+            try:
+                out[dt] = (float(amount), float(turnover))
+            except ValueError:
+                out[dt] = (0.0, 0.0)
+        return out
+    except Exception as e:
+        print(f"[warn] 东财成交额抓取失败, 将使用估算: {e}")
+        return {}
+
+
 def fetch_and_save(code: str, freq: str = "day", fq: str = "qfq",
                    start: str = "1990-01-01", outdir: str | None = None,
                    end: date | None = None) -> str:
@@ -135,12 +187,23 @@ def fetch_and_save(code: str, freq: str = "day", fq: str = "qfq",
     if not raw:
         raise SystemExit(f"未取到数据, 请检查代码 {code} (解析为 {symbol}) 是否正确")
 
+    # 补充真实成交额/换手率(腾讯日线接口不提供, 改由东方财富补齐; 失败则按成交量×均价估算)
+    em_ind = fetch_em_indicators(symbol, frequency, fq)
+
     out_rows = []
     for item in raw:
-        day, o, c, h, l = item[0], item[1], item[2], item[3], item[4]
+        day = item[0]
+        o, c, h, l = float(item[1]), float(item[2]), float(item[3]), float(item[4])
         vol_lots = float(item[5]) if len(item) > 5 and item[5] else 0.0
         volume = int(vol_lots * 100)            # 手 -> 股
-        out_rows.append([day, o, h, l, c, volume, 0])   # 成交额腾讯不提供, 置 0
+        em_row = em_ind.get(day)
+        if em_row and em_row[0] > 0:
+            amount, turnover = em_row[0], em_row[1]
+        else:
+            # 估算: 成交额 ≈ 成交量(股) × 成交均价; 换手率缺省 0
+            amount = volume * (h + l + c) / 3
+            turnover = 0.0
+        out_rows.append([day, o, h, l, c, volume, amount, turnover])
 
     outdir = outdir or "/Users/ccb/dev/Kronos/data"
     os.makedirs(outdir, exist_ok=True)
@@ -151,7 +214,7 @@ def fetch_and_save(code: str, freq: str = "day", fq: str = "qfq",
 
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["timestamps", "open", "high", "low", "close", "volume", "amount"])
+        w.writerow(["timestamps", "open", "high", "low", "close", "volume", "amount", "turnover"])
         w.writerows(out_rows)
 
     print(f"代码 : {code} ({symbol})")
