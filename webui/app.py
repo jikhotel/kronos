@@ -370,16 +370,40 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
     else:
         fig = go.Figure()
 
-    def _x_of(frame):
-        if 'timestamps' in frame.columns:
-            return [_fmt_label(t) for t in frame['timestamps']]
-        return list(frame.index)
+    n_hist = len(historical_df)
+    n_pred = len(pred_df) if pred_df is not None else 0
+
+    # 用「连续整数交易日索引」作为 X 轴(数值轴)——缩放/平移极顺滑;
+    # 日期只作为刻度文本与 hover 提示, 不进入坐标轴, 因此既无周末空白、K 线连续,
+    # 又避免了 category 轴缩放时一段段跳变导致的卡顿。
+    hist_idx = list(range(n_hist))
+    if 'timestamps' in historical_df.columns:
+        hist_labels = [_fmt_label(t) for t in historical_df['timestamps']]
+    else:
+        hist_labels = [str(i) for i in hist_idx]
+
+    # 预测 / 实际段索引接续在历史段之后
+    pred_idx = list(range(n_hist, n_hist + n_pred))
+    if pred_timestamps is not None:
+        pred_timestamps = list(pred_timestamps)[:n_pred] if n_pred else []
+        pred_labels = [_fmt_label(t) for t in pred_timestamps] if pred_timestamps else [str(i) for i in pred_idx]
+    else:
+        pred_labels = [str(i) for i in pred_idx]
+
+    def _ohlc_texts(labels, o, h, l, c):
+        # candlestick 不支持 hovertemplate, 改用预格式化 hovertext + hoverinfo='text'
+        # 直接在数值索引轴上显示「日期 + 开高低收」, 既保留信息又让缩放顺滑
+        return [f'{lab}<br>开:{ov:.2f} 高:{hv:.2f} 低:{lv:.2f} 收:{cv:.2f}'
+                for lab, ov, hv, lv, cv in zip(labels, o, h, l, c)]
 
     # ---- 主图: K 线 (row=1) ----
     fig.add_trace(go.Candlestick(
-        x=_x_of(historical_df),
+        x=hist_idx,
         open=historical_df['open'], high=historical_df['high'],
         low=historical_df['low'], close=historical_df['close'],
+        hovertext=_ohlc_texts(hist_labels, historical_df['open'], historical_df['high'],
+                              historical_df['low'], historical_df['close']),
+        hoverinfo='text',
         name='Historical Data',
         increasing_line_color=UP_COLOR, increasing_fillcolor=UP_COLOR,
         decreasing_line_color=DOWN_COLOR, decreasing_fillcolor=DOWN_COLOR
@@ -387,39 +411,38 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
 
     # 预测数据 (candlestick)
     if pred_df is not None and len(pred_df) > 0:
-        if pred_timestamps is None:
-            pred_timestamps = range(len(historical_df), len(historical_df) + len(pred_df))
-        pred_timestamps = list(pred_timestamps)[:len(pred_df)]
-        pred_x = _to_labels(pred_timestamps)
-
         pred_label = 'Future Forecast' if mode == 'forecast' else 'Prediction Data'
         fig.add_trace(go.Candlestick(
-            x=pred_x,
+            x=pred_idx,
             open=pred_df['open'], high=pred_df['high'],
             low=pred_df['low'], close=pred_df['close'],
+            hovertext=_ohlc_texts(pred_labels, pred_df['open'], pred_df['high'],
+                                  pred_df['low'], pred_df['close']),
+            hoverinfo='text',
             name=f'{pred_label} ({len(pred_df)} points)',
             increasing_line_color=UP_COLOR, increasing_fillcolor=UP_COLOR,
         decreasing_line_color=DOWN_COLOR, decreasing_fillcolor=DOWN_COLOR
         ), row=1, col=1)
 
-        # 历史与未来之间画一条分界线
-        if len(historical_df) > 0 and 'timestamps' in historical_df.columns:
+        # 历史与未来之间画一条分界线(最后一根历史 K 线右侧)
+        if n_hist > 0:
             fig.add_vline(
-                x=_fmt_label(historical_df['timestamps'].iloc[-1]),
+                x=n_hist - 0.5,
                 line_width=1, line_dash='dash', line_color='#9E9E9E',
                 row=1, col=1
             )
 
-    # 实际数据 (回测比对)
+    # 实际数据 (回测比对) — 与预测段同位置对齐
     if actual_df is not None and len(actual_df) > 0:
-        actual_timestamps = (list(pred_timestamps)[:len(actual_df)]
-                             if pred_timestamps is not None
-                             else range(len(historical_df), len(historical_df) + len(actual_df)))
-        actual_x = _to_labels(actual_timestamps)
+        actual_idx = pred_idx[:len(actual_df)]
+        actual_labels = pred_labels[:len(actual_df)]
         fig.add_trace(go.Candlestick(
-            x=actual_x,
+            x=actual_idx,
             open=actual_df['open'], high=actual_df['high'],
             low=actual_df['low'], close=actual_df['close'],
+            hovertext=_ohlc_texts(actual_labels, actual_df['open'], actual_df['high'],
+                                  actual_df['low'], actual_df['close']),
+            hoverinfo='text',
             name=f'Actual Data ({len(actual_df)} points)',
             increasing_line_color=UP_COLOR, increasing_fillcolor=UP_COLOR,
         decreasing_line_color=DOWN_COLOR, decreasing_fillcolor=DOWN_COLOR
@@ -428,48 +451,45 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
     # ---- 副图: 可选参考指标 (row=2) ----
     if has_lower:
         if ind_col == 'amount':
-            hovertpl = '%{x}<br>成交额: %{y:,.0f}<extra></extra>'
+            hovertpl = '%{customdata}<br>成交额: %{y:,.0f}<extra></extra>'
         elif ind_col == 'turnover':
-            hovertpl = '%{x}<br>换手率: %{y:.2f}%<extra></extra>'
+            hovertpl = '%{customdata}<br>换手率: %{y:.2f}%<extra></extra>'
         else:
-            hovertpl = '%{x}<br>成交量: %{y:,.0f}<extra></extra>'
+            hovertpl = '%{customdata}<br>成交量: %{y:,.0f}<extra></extra>'
 
         fig.add_trace(go.Bar(
-            x=_x_of(historical_df),
+            x=hist_idx,
             y=historical_df[ind_col],
+            customdata=hist_labels,
             marker_color=_vol_colors(historical_df),
             name=ind_label, showlegend=False,
             hovertemplate=hovertpl
         ), row=2, col=1)
 
         if actual_df is not None and len(actual_df) > 0 and ind_col in actual_df.columns:
-            actual_timestamps = (list(pred_timestamps)[:len(actual_df)]
-                                 if pred_timestamps is not None
-                                 else range(len(historical_df), len(historical_df) + len(actual_df)))
-            actual_x = _to_labels(actual_timestamps)
             fig.add_trace(go.Bar(
-                x=actual_x,
+                x=actual_idx,
                 y=actual_df[ind_col],
+                customdata=actual_labels,
                 marker_color=_vol_colors(actual_df),
                 name=f'Actual {ind_label}', showlegend=False,
                 hovertemplate=hovertpl
             ), row=2, col=1)
 
     # ---- 布局 ----
-    n_pred = len(pred_df) if pred_df is not None else 0
     if mode == 'forecast':
-        title = f'Kronos 未来走势预测 — 最新 {len(historical_df)} 根历史 + 未来 {n_pred} 根预测'
+        title = f'Kronos 未来走势预测 — 最新 {n_hist} 根历史 + 未来 {n_pred} 根预测'
     else:
-        title = f'Kronos 历史回测 — {len(historical_df)} 根输入 + {n_pred} 根预测 vs 实际'
+        title = f'Kronos 历史回测 — {n_hist} 根输入 + {n_pred} 根预测 vs 实际'
 
     fig.update_layout(
         title=title,
-        xaxis_title='交易日',
         yaxis_title='Price',
         template='plotly_white',
         height=720,
         showlegend=True,
         dragmode='pan',          # 左键拖动 = 左右平移
+        uirevision='kronos-chart',  # 切换指标时保留用户已做的缩放/平移
         margin=dict(l=30, r=65, t=60, b=45)   # 右轴留宽: 价格/成交量刻度置于右侧(同花顺风格)
     )
     # 同花顺风格: 价格轴与参考指标轴均置于右侧
@@ -477,14 +497,34 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
     if has_lower:
         fig.update_yaxes(title_text=ind_label, row=2, col=1)
 
-    # x 轴: 改用 category 类型, 去掉周末/节假日的空白, K 线连续排列(无断档)
-    # 注意: category 轴不要显式设置字符串 range, 否则 Plotly 会解析失败,
-    # 导致只显示前几个 category。让 Plotly 自动显示所有 categories 即可。
+    # X 轴: 数值索引轴(连续整数) -> 缩放/平移连续顺滑; 非交易日已无空白;
+    # 仅取少量索引点显示日期刻度, 避免上百个标签堆叠重叠。
+    total = n_hist + n_pred
+    tick_step = max(1, total // 12)
+    tick_vals, tick_text = [], []
+    for i in range(0, total, tick_step):
+        if i < n_hist:
+            tick_vals.append(i); tick_text.append(hist_labels[i])
+        else:
+            j = i - n_hist
+            if j < len(pred_labels):
+                tick_vals.append(i); tick_text.append(pred_labels[j])
+    # 确保最后一根 K 线也带日期标签
+    last = total - 1
+    if last >= 0 and (last not in tick_vals):
+        if last < n_hist:
+            tick_vals.append(last); tick_text.append(hist_labels[last])
+        elif (last - n_hist) < len(pred_labels):
+            tick_vals.append(last); tick_text.append(pred_labels[last - n_hist])
+
     fig.update_xaxes(
         rangeslider_visible=False,
-        type='category',
-        tickangle=-45,
-        nticks=30
+        title_text='交易日',
+        title_standoff=20,
+        tickmode='array',
+        tickvals=tick_vals,
+        ticktext=tick_text,
+        tickangle=-45
     )
 
     return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
