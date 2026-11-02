@@ -1,4 +1,16 @@
-Changes：
+<div align="center">
+
+  <h2><b>Kronos-WebUI 本地增强版</b></h2>
+
+  <img src="https://img.shields.io/badge/version-1.0-blue" alt="v1.0">
+  <img src="https://img.shields.io/badge/platform-macOS%20CPU-lightgrey" alt="platform">
+  <img src="https://img.shields.io/badge/stocks-A%E8%82%A1%20%2B%20%E6%B8%AF%E8%82%A1-red" alt="A+HK">
+
+</div>
+
+## 📦 本地增强版 v1.0
+
+Changes（基于清华开源 [shiyu-coder/Kronos](https://github.com/shiyu-coder/Kronos) MIT 协议）：
 
 1. 调整k线图展示，支持缩放，区间选择，增加成交量
 2. 调整历史数据，预测数据选择，支持预测功能
@@ -6,6 +18,22 @@ Changes：
 4. 增加分钟k线预测
 5. 修复页面显示bug，选股下拉问题，数据修改
 
+### 快速启动
+
+```bash
+bash start_webui.sh
+# 浏览器访问 http://localhost:7070
+```
+
+功能特性：
+- 同花顺风格 K 线（涨红跌绿、实心阴阳线、坐标轴右置），连续交易日无断档
+- 滚轮平滑缩放 / 拖动平移 / 双击重置
+- 下方参考指标切换：成交量 / 成交额 / 换手率（免重算重绘）
+- 未来走势预测（forecast）与历史回测（backtest）双模式
+- A股 + 港股模糊搜索（代码 / 拼音首字母）实时拉取数据并导入
+- 默认模型 kronos-base，CPU 推理，全程本地运行
+
+---
 
 <div align="center">
   <h2><b>Kronos: A Foundation Model for the Language of Financial Markets </b></h2>
