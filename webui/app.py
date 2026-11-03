@@ -976,6 +976,47 @@ def get_model_status():
             'message': 'Kronos model library not available, please install related dependencies'
         })
 
+# ============================================================
+# 量化交易子系统: 策略管理 / 回测 / 实盘(模拟盘)
+# ============================================================
+try:
+    import quant.api as quant_api
+    from quant import db as quant_db
+
+    def _kronos_predict_provider():
+        """为量化子系统提供 Kronos 预测函数(模型未加载时返回 None)。"""
+        if predictor is None:
+            return None
+
+        def predict_fn(window_df, horizon):
+            required_cols = [c for c in ('open', 'high', 'low', 'close', 'volume', 'amount')
+                             if c in window_df.columns]
+            x_df = window_df[required_cols].copy()
+            x_ts = pd.Series(window_df['timestamps'].values, name='timestamps')
+            y_ts = pd.Series(generate_future_timestamps(window_df['timestamps'], horizon),
+                             name='timestamps')
+            pred_df = predictor.predict(
+                df=x_df, x_timestamp=x_ts, y_timestamp=y_ts,
+                pred_len=horizon, T=1.0, top_p=0.95, sample_count=1
+            )
+            return [float(v) for v in pred_df['close']]
+
+        return predict_fn
+
+    quant_api.set_predict_provider(_kronos_predict_provider)
+    app.register_blueprint(quant_api.quant_bp)
+    quant_db.init_db()
+
+    @app.route('/quant')
+    def quant_page():
+        """量化交易系统页面"""
+        return render_template('quant.html')
+
+    QUANT_AVAILABLE = True
+except Exception as _quant_err:
+    QUANT_AVAILABLE = False
+    print(f"Warning: quant subsystem unavailable: {_quant_err}")
+
 if __name__ == '__main__':
     print("Starting Kronos Web UI...")
     print(f"Model availability: {MODEL_AVAILABLE}")

@@ -93,3 +93,8 @@ examples/yuce/
 
 # Runtime prediction output (regenerable JSON from WebUI)
 webui/prediction_results/
+
+# Quant subsystem runtime database (strategies/backtests/orders live data)
+quant/quant.db
+quant/quant.db-wal
+quant/quant.db-shm

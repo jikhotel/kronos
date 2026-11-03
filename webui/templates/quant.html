@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kronos 量化交易系统</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0d1117; color: #e6edf3; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; min-height: 100vh; }
+.container { max-width: 1280px; margin: 0 auto; padding: 20px; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 18px 0 8px; flex-wrap: wrap; gap: 10px; }
+header h1 { font-size: 22px; color: #58d5f0; }
+header h1 span { color: #e6edf3; font-size: 14px; font-weight: normal; margin-left: 8px; }
+.back-link { color: #8b949e; text-decoration: none; font-size: 13px; border: 1px solid #30363d; padding: 6px 14px; border-radius: 6px; }
+.back-link:hover { color: #58d5f0; border-color: #58d5f0; }
+.tabs { display: flex; gap: 6px; margin: 14px 0 18px; border-bottom: 1px solid #21262d; }
+.tab-btn { background: none; border: none; color: #8b949e; font-size: 15px; padding: 10px 22px; cursor: pointer; border-bottom: 2px solid transparent; }
+.tab-btn.active { color: #58d5f0; border-bottom-color: #58d5f0; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+.card { background: #161b22; border: 1px solid #21262d; border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+.card h3 { font-size: 15px; color: #58d5f0; margin-bottom: 14px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.form-item label { display: block; font-size: 12px; color: #8b949e; margin-bottom: 4px; }
+.form-item input, .form-item select, .form-item textarea {
+  width: 100%; background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+  border-radius: 6px; padding: 7px 10px; font-size: 13px; outline: none;
+}
+.form-item input:focus, .form-item select:focus, .form-item textarea:focus { border-color: #58d5f0; }
+.form-item.full { grid-column: 1 / -1; }
+textarea { font-family: "SF Mono", Menlo, monospace; resize: vertical; min-height: 60px; }
+.btn { background: #1f6feb; color: #fff; border: none; border-radius: 6px; padding: 9px 22px; font-size: 14px; cursor: pointer; }
+.btn:hover { background: #388bfd; }
+.btn.success { background: #238636; } .btn.success:hover { background: #2ea043; }
+.btn.danger { background: #da3633; } .btn.danger:hover { background: #f85149; }
+.btn.warn { background: #9e6a03; } .btn.warn:hover { background: #bb8009; }
+.btn.small { padding: 4px 12px; font-size: 12px; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: #8b949e; font-weight: 500; padding: 8px 10px; border-bottom: 1px solid #21262d; white-space: nowrap; }
+td { padding: 8px 10px; border-bottom: 1px solid #21262d; white-space: nowrap; }
+tr:hover td { background: #1c2128; }
+.pos { color: #f85149; } .neg { color: #3fb950; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; }
+.badge.on { background: rgba(35,134,54,.25); color: #3fb950; }
+.badge.off { background: rgba(139,148,158,.15); color: #8b949e; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.metric { background: #0d1117; border: 1px solid #21262d; border-radius: 8px; padding: 12px; text-align: center; }
+.metric .v { font-size: 18px; font-weight: 600; margin-top: 4px; }
+.metric .k { font-size: 12px; color: #8b949e; }
+#bt-chart { width: 100%; height: 560px; }
+#status-bar { position: fixed; top: 14px; right: 18px; padding: 10px 18px; border-radius: 8px; font-size: 13px; display: none; z-index: 99; }
+#status-bar.ok { background: #12261e; color: #3fb950; border: 1px solid #238636; }
+#status-bar.err { background: #2d1417; color: #f85149; border: 1px solid #da3633; }
+.muted { color: #8b949e; font-size: 12px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.live-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+.live-dot.on { background: #3fb950; box-shadow: 0 0 6px #3fb950; animation: pulse 1.5s infinite; }
+.live-dot.off { background: #8b949e; }
+@keyframes pulse { 50% { opacity: .4; } }
+.empty { color: #484f58; text-align: center; padding: 22px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="status-bar"></div>
+<div class="container">
+  <header>
+    <h1>🤖 Kronos 量化交易系统 <span>策略管理 · 回测 · 实盘</span></h1>
+    <a class="back-link" href="/">← 返回 K 线预测</a>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="tab-strategy">📋 策略管理</button>
+    <button class="tab-btn" data-tab="tab-backtest">📊 策略回测</button>
+    <button class="tab-btn" data-tab="tab-live">💰 实盘交易</button>
+  </div>
+
+  <!-- ============ Tab 1: 策略管理 ============ -->
+  <div id="tab-strategy" class="tab-pane active">
+    <div class="card">
+      <h3>新建策略</h3>
+      <div class="form-grid">
+        <div class="form-item"><label>策略名称</label><input id="s-name" placeholder="如: 双均线-川金诺"></div>
+        <div class="form-item"><label>策略类型</label><select id="s-type"></select></div>
+        <div class="form-item"><label>股票代码 (A股/港股)</label><input id="s-symbol" placeholder="300505 / 00700"></div>
+        <div class="form-item"><label>初始资金</label><input id="s-capital" type="number" value="100000"></div>
+        <div class="form-item"><label>佣金率</label><input id="s-commission" type="number" step="0.0001" value="0.0003"></div>
+        <div class="form-item"><label>滑点</label><input id="s-slippage" type="number" step="0.001" value="0.001"></div>
+        <div class="form-item"><label>仓位比例</label><input id="s-ratio" type="number" step="0.05" value="0.95"></div>
+        <div class="form-item full"><label>策略参数 (JSON)</label><textarea id="s-params">{}</textarea></div>
+      </div>
+      <div style="margin-top: 14px;" class="row">
+        <button class="btn" onclick="createStrategy()">➕ 创建策略</button>
+        <span class="muted" id="type-desc"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>我的策略</h3>
+      <table>
+        <thead><tr><th>ID</th><th>名称</th><th>类型</th><th>标的</th><th>参数</th><th>资金</th><th>状态</th><th>操作</th></tr></thead>
+        <tbody id="strategy-tbody"><tr><td colspan="8" class="empty">暂无策略</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ Tab 2: 回测 ============ -->
+  <div id="tab-backtest" class="tab-pane">
+    <div class="card">
+      <h3>运行回测</h3>
+      <div class="form-grid">
+        <div class="form-item"><label>选择策略</label><select id="bt-strategy"></select></div>
+        <div class="form-item"><label>数据文件</label><select id="bt-file"></select></div>
+        <div class="form-item"><label>开始日期(可选)</label><input id="bt-start" type="date"></div>
+        <div class="form-item"><label>结束日期(可选)</label><input id="bt-end" type="date"></div>
+      </div>
+      <div style="margin-top: 14px;">
+        <button class="btn" id="bt-run-btn" onclick="runBacktest()">▶ 运行回测</button>
+        <span class="muted" style="margin-left:10px">信号 T 收盘产生, T+1 开盘成交; 佣金双边最低 5 元; 整百股</span>
+      </div>
+    </div>
+    <div class="card" id="bt-result-card" style="display:none">
+      <h3 id="bt-result-title">回测结果</h3>
+      <div class="metrics" id="bt-metrics"></div>
+    </div>
+    <div class="card" id="bt-chart-card" style="display:none">
+      <h3>净值曲线 · 买卖点</h3>
+      <div id="bt-chart"></div>
+    </div>
+    <div class="card" id="bt-trades-card" style="display:none">
+      <h3>交易明细</h3>
+      <div style="max-height:320px; overflow:auto"><table>
+        <thead><tr><th>#</th><th>日期</th><th>方向</th><th>价格</th><th>数量</th><th>金额</th><th>手续费</th><th>盈亏</th><th>收益率</th></tr></thead>
+        <tbody id="bt-trades-tbody"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>历史回测记录</h3>
+      <table>
+        <thead><tr><th>ID</th><th>策略</th><th>类型</th><th>标的</th><th>区间</th><th>总收益</th><th>年化</th><th>最大回撤</th><th>夏普</th><th>胜率</th><th>操作</th></tr></thead>
+        <tbody id="bt-history-tbody"><tr><td colspan="11" class="empty">暂无记录</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ Tab 3: 实盘 ============ -->
+  <div id="tab-live" class="tab-pane">
+    <div class="card">
+      <h3><span class="live-dot off" id="live-dot"></span>实盘引擎 <span class="muted" id="live-engine-msg"></span></h3>
+      <div class="row" style="margin-bottom: 10px;">
+        <span class="muted">当前通道: 模拟盘(Paper) · 实时行情驱动 · A股规则(T+1/整手/涨跌停)</span>
+      </div>
+      <div class="row">
+        <button class="btn success" id="live-start-btn" onclick="startLive()">🚀 启动引擎</button>
+        <button class="btn warn" id="live-stop-btn" onclick="stopLive()" disabled>⏸ 停止引擎</button>
+        <label class="muted"><input type="checkbox" id="live-reset"> 启动时重置账户</label>
+        <input id="live-cash" type="number" value="1000000" style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:6px 10px;width:130px" title="初始资金">
+        <span class="muted">元</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>账户总览</h3>
+      <div class="metrics" id="live-account"></div>
+    </div>
+    <div class="card">
+      <h3>当前持仓</h3>
+      <table>
+        <thead><tr><th>策略</th><th>代码</th><th>名称</th><th>持仓量</th><th>可卖量</th><th>成本</th><th>现价</th><th>市值</th><th>浮动盈亏</th></tr></thead>
+        <tbody id="live-positions-tbody"><tr><td colspan="9" class="empty">暂无持仓</td></tr></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>订单流水</h3>
+      <div style="max-height:360px; overflow:auto"><table>
+        <thead><tr><th>ID</th><th>时间</th><th>策略</th><th>代码</th><th>方向</th><th>价格</th><th>数量</th><th>金额</th><th>状态</th><th>原因</th></tr></thead>
+        <tbody id="live-orders-tbody"><tr><td colspan="10" class="empty">暂无订单</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>使用说明</h3>
+      <div class="muted" style="line-height: 2">
+        1. 在「策略管理」创建策略并将状态切为 <b style="color:#3fb950">active</b>; 2. 点击「启动引擎」— 后台每 60 秒轮询一次:
+        拉取标最新日K计算信号, 信号翻转时按实时行情价模拟成交; 3. Kronos 预测策略需要先在首页加载模型,
+        每天最多推理一次; 4. 接真实券商: 实现 BrokerBase 接口后注入 LiveEngine 即可, 模拟盘与实盘共用同一策略与信号层。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============ 通用 ============
+const fmt = v => (v === null || v === undefined) ? '-' : Number(v).toLocaleString('zh-CN', {maximumFractionDigits: 2});
+const pnlCls = v => v > 0 ? 'pos' : (v < 0 ? 'neg' : '');
+const pnlStr = v => (v > 0 ? '+' : '') + fmt(v);
+
+function showStatus(type, msg) {
+  const bar = document.getElementById('status-bar');
+  bar.className = type; bar.textContent = msg; bar.style.display = 'block';
+  clearTimeout(showStatus._t);
+  showStatus._t = setTimeout(() => bar.style.display = 'none', 3200);
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'tab-live') refreshLive();
+  });
+});
+
+// ============ 策略管理 ============
+let strategyTypes = {}, strategies = [];
+
+async function loadStrategyTypes() {
+  const res = await axios.get('/api/quant/strategy-types');
+  strategyTypes = res.data.types;
+  const sel = document.getElementById('s-type');
+  sel.innerHTML = '';
+  Object.entries(strategyTypes).forEach(([key, t]) => {
+    const opt = document.createElement('option');
+    opt.value = key; opt.textContent = `${t.label}`;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', onTypeChange);
+  onTypeChange();
+}
+
+function onTypeChange() {
+  const key = document.getElementById('s-type').value;
+  const t = strategyTypes[key];
+  if (!t) return;
+  document.getElementById('s-params').value = JSON.stringify(t.params, null, 2);
+  document.getElementById('type-desc').textContent = t.desc;
+}
+
+async function loadStrategies() {
+  const res = await axios.get('/api/quant/strategies');
+  strategies = res.data.strategies;
+  renderStrategies();
+  renderBacktestSelect();
+}
+
+function renderStrategies() {
+  const tbody = document.getElementById('strategy-tbody');
+  if (!strategies.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">暂无策略, 请先创建</td></tr>'; return; }
+  tbody.innerHTML = strategies.map(s => `
+    <tr>
+      <td>${s.id}</td>
+      <td>${s.name}</td>
+      <td>${(strategyTypes[s.type] || {}).label || s.type}</td>
+      <td>${s.symbol}</td>
+      <td class="muted">${JSON.stringify(s.params)}</td>
+      <td>${fmt(s.initial_capital)}</td>
+      <td><span class="badge ${s.status === 'active' ? 'on' : 'off'}">${s.status === 'active' ? '运行中' : '已停止'}</span></td>
+      <td>
+        <button class="btn small" onclick="quickBacktest(${s.id})">📊 回测</button>
+        <button class="btn small ${s.status === 'active' ? 'warn' : 'success'}" onclick="toggleStrategy(${s.id})">${s.status === 'active' ? '停止' : '启动'}</button>
+        <button class="btn small danger" onclick="deleteStrategy(${s.id})">删除</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function createStrategy() {
+  let params;
+  try { params = JSON.parse(document.getElementById('s-params').value || '{}'); }
+  catch (e) { return showStatus('err', '策略参数不是合法 JSON'); }
+  const res = await axios.post('/api/quant/strategies', {
+    name: document.getElementById('s-name').value,
+    type: document.getElementById('s-type').value,
+    symbol: document.getElementById('s-symbol').value,
+    params,
+    initial_capital: +document.getElementById('s-capital').value,
+    commission_rate: +document.getElementById('s-commission').value,
+    slippage: +document.getElementById('s-slippage').value,
+    position_ratio: +document.getElementById('s-ratio').value
+  });
+  if (res.data.success) { showStatus('ok', `策略「${res.data.strategy.name}」已创建`); loadStrategies(); }
+  else showStatus('err', res.data.error);
+}
+
+async function toggleStrategy(id) {
+  const s = strategies.find(x => x.id === id);
+  const next = s.status === 'active' ? 'stopped' : 'active';
+  const res = await axios.put(`/api/quant/strategies/${id}`, {status: next});
+  if (res.data.success) { showStatus('ok', next === 'active' ? '策略已激活(引擎运行时自动交易)' : '策略已停止'); loadStrategies(); }
+  else showStatus('err', res.data.error);
+}
+
+async function deleteStrategy(id) {
+  if (!confirm('确认删除该策略? 关联持仓也会清理')) return;
+  const res = await axios.delete(`/api/quant/strategies/${id}`);
+  if (res.data.success) { showStatus('ok', '已删除'); loadStrategies(); }
+  else showStatus('err', res.data.error);
+}
+
+function quickBacktest(id) {
+  document.querySelector('[data-tab="tab-backtest"]').click();
+  document.getElementById('bt-strategy').value = String(id);
+}
+
+// ============ 回测 ============
+async function loadFiles() {
+  const res = await axios.get('/api/quant/data-files');
+  const sel = document.getElementById('bt-file');
+  sel.innerHTML = '<option value="">自动匹配策略标的</option>' +
+    res.data.files.map(f => `<option value="${f.path}">${f.name} (${f.size_kb}KB)</option>`).join('');
+}
+
+function renderBacktestSelect() {
+  const sel = document.getElementById('bt-strategy');
+  sel.innerHTML = strategies.map(s =>
+    `<option value="${s.id}">#${s.id} ${s.name} · ${(strategyTypes[s.type]||{}).label||s.type} · ${s.symbol}</option>`).join('');
+}
+
+async function runBacktest() {
+  const sid = document.getElementById('bt-strategy').value;
+  if (!sid) return showStatus('err', '请先创建并选择策略');
+  const btn = document.getElementById('bt-run-btn');
+  btn.disabled = true; btn.textContent = '回测运行中...';
+  try {
+    const res = await axios.post('/api/quant/backtest', {
+      strategy_id: +sid,
+      file_path: document.getElementById('bt-file').value || null,
+      start_date: document.getElementById('bt-start').value || null,
+      end_date: document.getElementById('bt-end').value || null
+    });
+    if (res.data.success) {
+      renderBacktestResult(res.data);
+      showStatus('ok', `回测完成: ${res.data.n_bars} 根 K 线, ${res.data.metrics.n_trades} 笔平仓交易`);
+      loadBacktestHistory();
+    } else showStatus('err', res.data.error);
+  } catch (e) {
+    showStatus('err', e.response?.data?.error || e.message);
+  } finally { btn.disabled = false; btn.textContent = '▶ 运行回测'; }
+}
+
+function renderBacktestResult(d) {
+  document.getElementById('bt-result-card').style.display = 'block';
+  document.getElementById('bt-result-title').textContent = `回测结果 — ${d.file} · ${d.n_bars} 根`;
+  const m = d.metrics;
+  document.getElementById('bt-metrics').innerHTML = [
+    ['总收益', (m.total_return_pct > 0 ? '+' : '') + m.total_return_pct + '%', m.total_return_pct],
+    ['年化收益', m.annual_return_pct + '%', m.annual_return_pct],
+    ['最大回撤', m.max_drawdown_pct + '%', m.max_drawdown_pct],
+    ['夏普比率', m.sharpe, m.sharpe],
+    ['胜率', m.win_rate_pct + '%', null],
+    ['盈亏比', m.profit_factor, null],
+    ['平仓次数', m.n_trades, null],
+    ['期末净值', fmt(m.final_equity), null],
+    ['买入持有', (m.buy_hold_pct > 0 ? '+' : '') + m.buy_hold_pct + '%', m.buy_hold_pct]
+  ].map(([k, v, cmp]) => `<div class="metric"><div class="k">${k}</div><div class="v ${cmp !== null && cmp !== undefined ? pnlCls(cmp) : ''}">${v}</div></div>`).join('');
+
+  document.getElementById('bt-chart-card').style.display = 'block';
+  const chartData = JSON.parse(d.chart);
+  Plotly.newPlot('bt-chart', chartData.data, chartData.layout, {
+    scrollZoom: true, responsive: true, displaylogo: false, doubleClick: 'reset',
+    modeBarButtonsToRemove: ['select2d', 'lasso2d']
+  });
+
+  document.getElementById('bt-trades-card').style.display = 'block';
+  const tb = document.getElementById('bt-trades-tbody');
+  tb.innerHTML = d.trades.length ? d.trades.map((t, i) => `
+    <tr><td>${i + 1}</td><td>${t.date}</td>
+    <td class="${t.side === 'BUY' ? 'pos' : 'neg'}">${t.side === 'BUY' ? '买入' : '卖出'}</td>
+    <td>${t.price}</td><td>${fmt(t.volume)}</td><td>${fmt(t.amount)}</td><td>${fmt(t.fee)}</td>
+    <td class="${pnlCls(t.pnl || 0)}">${t.pnl !== undefined ? pnlStr(t.pnl) : '-'}</td>
+    <td class="${pnlCls(t.ret_pct || 0)}">${t.ret_pct !== undefined ? (t.ret_pct > 0 ? '+' : '') + t.ret_pct + '%' : '-'}</td></tr>`).join('')
+    : '<tr><td colspan="9" class="empty">区间内无交易</td></tr>';
+}
+
+async function loadBacktestHistory() {
+  const res = await axios.get('/api/quant/backtests');
+  const tb = document.getElementById('bt-history-tbody');
+  tb.innerHTML = res.data.backtests.length ? res.data.backtests.map(b => {
+    const m = b.metrics || {};
+    return `<tr><td>${b.id}</td><td>${b.strategy_name}</td>
+      <td>${(strategyTypes[b.type] || {}).label || b.type}</td><td>${b.symbol}</td>
+      <td>${b.start_date} ~ ${b.end_date}</td>
+      <td class="${pnlCls(m.total_return_pct)}">${m.total_return_pct}%</td>
+      <td class="${pnlCls(m.annual_return_pct)}">${m.annual_return_pct}%</td>
+      <td class="neg">${m.max_drawdown_pct}%</td><td>${m.sharpe}</td>
+      <td>${m.win_rate_pct}%</td>
+      <td><button class="btn small" onclick="viewBacktest(${b.id})">查看</button></td></tr>`;
+  }).join('') : '<tr><td colspan="11" class="empty">暂无记录</td></tr>';
+}
+
+async function viewBacktest(id) {
+  const res = await axios.get(`/api/quant/backtests/${id}`);
+  if (res.data.error) return showStatus('err', res.data.error);
+  renderBacktestResult({metrics: res.data.metrics, trades: res.data.trades,
+    chart: res.data.chart, n_bars: '历史', file: res.data.file_path || '-'});
+  document.getElementById('bt-result-card').scrollIntoView({behavior: 'smooth'});
+}
+
+// ============ 实盘 ============
+let liveTimer = null;
+
+async function startLive() {
+  const body = {initial_cash: +document.getElementById('live-cash').value || 1000000,
+                reset: document.getElementById('live-reset').checked};
+  const res = await axios.post('/api/quant/live/start', body);
+  if (res.data.success) { showStatus('ok', res.data.message); refreshLive(); }
+  else showStatus('err', res.data.error || '启动失败');
+}
+
+async function stopLive() {
+  const res = await axios.post('/api/quant/live/stop');
+  if (res.data.success) { showStatus('ok', res.data.message); refreshLive(); }
+}
+
+async function refreshLive() {
+  try {
+    const res = await axios.get('/api/quant/live/status');
+    const d = res.data;
+    const running = d.running;
+    document.getElementById('live-dot').className = 'live-dot ' + (running ? 'on' : 'off');
+    document.getElementById('live-start-btn').disabled = running;
+    document.getElementById('live-stop-btn').disabled = !running;
+    document.getElementById('live-engine-msg').textContent =
+      (running ? `运行中 · 每 ${d.poll_interval}s 轮询 · 上次: ${d.last_cycle_at || '-'}` : '已停止') +
+      (d.last_error ? ` · ⚠ ${d.last_error}` : '');
+
+    const a = d.account;
+    document.getElementById('live-account').innerHTML = [
+      ['总资产', fmt(a.total), a.total - a.initial_cash],
+      ['可用资金', fmt(a.cash), null],
+      ['持仓市值', fmt(a.market_value), null],
+      ['总盈亏', pnlStr(a.total_pnl), a.total_pnl],
+      ['总收益率', a.total_pnl_pct + '%', a.total_pnl_pct],
+      ['浮动盈亏', pnlStr(a.position_pnl), a.position_pnl]
+    ].map(([k, v, cmp]) => `<div class="metric"><div class="k">${k}</div><div class="v ${cmp !== null && cmp !== undefined ? pnlCls(cmp) : ''}">${v}</div></div>`).join('');
+
+    const pt = document.getElementById('live-positions-tbody');
+    pt.innerHTML = d.positions.length ? d.positions.map(p => `
+      <tr><td>#${p.strategy_id}</td><td>${p.symbol}</td><td>${p.name}</td>
+      <td>${fmt(p.volume)}</td><td>${fmt(p.available_volume)}</td><td>${p.avg_cost}</td><td>${p.price}</td>
+      <td>${fmt(p.market_value)}</td>
+      <td class="${pnlCls(p.pnl)}">${pnlStr(p.pnl)} (${p.pnl_pct}%)</td></tr>`).join('')
+      : '<tr><td colspan="9" class="empty">暂无持仓</td></tr>';
+
+    const ot = document.getElementById('live-orders-tbody');
+    ot.innerHTML = d.orders.length ? d.orders.map(o => `
+      <tr><td>${o.id}</td><td>${o.created_at}</td><td>${o.strategy_name || '#' + o.strategy_id}</td><td>${o.symbol}</td>
+      <td class="${o.side === 'BUY' ? 'pos' : 'neg'}">${o.side === 'BUY' ? '买入' : '卖出'}</td>
+      <td>${o.price}</td><td>${fmt(o.volume)}</td><td>${fmt(o.amount)}</td>
+      <td><span class="badge ${o.status === 'filled' ? 'on' : 'off'}">${o.status === 'filled' ? '已成交' : '已拒绝'}</span></td>
+      <td class="muted">${o.reason || ''}</td></tr>`).join('')
+      : '<tr><td colspan="10" class="empty">暂无订单</td></tr>';
+
+    if (running && !liveTimer) liveTimer = setInterval(refreshLive, 8000);
+    if (!running && liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+  } catch (e) { /* 静默 */ }
+}
+
+// ============ 初始化 ============
+loadStrategyTypes().then(() => loadStrategies());
+loadFiles();
+loadBacktestHistory();
+refreshLive();
+</script>
+</body>
+</html>
