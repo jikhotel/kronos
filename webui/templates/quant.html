@@ -156,7 +156,7 @@ tr:hover td { background: #1c2128; }
         <div class="form-item"><label>券商通道</label><select id="ba-type"></select></div>
         <div class="form-item"><label>资金账号</label><input id="ba-account" placeholder="券商资金账号"></div>
         <div class="form-item"><label>密码(交易密码)</label><input id="ba-password" type="password" placeholder="同花顺通道必填, QMT可留空"></div>
-        <div class="form-item full"><label>通道配置 (JSON: QMT填 userdata_path, 同花顺填 client_path)</label><textarea id="ba-config" style="min-height:56px">{}</textarea></div>
+        <div class="form-item full"><label>通道配置 (JSON: QMT填 userdata_path, 远程通道填 url+token, 同花顺填 client_path)</label><textarea id="ba-config" style="min-height:56px">{}</textarea></div>
         <div class="form-item full"><label>备注</label><input id="ba-remark" placeholder="可选"></div>
       </div>
       <div class="row">
@@ -455,6 +455,7 @@ async function loadBrokerTypes() {
     const t = brokerTypes[sel.value] || {};
     document.getElementById('ba-type-desc').textContent = t.desc || '';
     const preset = sel.value === 'qmt' ? JSON.stringify({userdata_path: 'D:\\\\国金QMT交易端\\\\userdata_mini', session_id: 888888}, null, 2)
+                 : sel.value === 'qmt_remote' ? JSON.stringify({url: 'http://云服务器公网IP:17890', token: '桥接服务启动时生成的令牌'}, null, 2)
                  : sel.value === 'ths' ? JSON.stringify({client_path: 'C:\\\\同花顺软件\\\\xiadan.exe'}, null, 2) : '{}';
     document.getElementById('ba-config').value = preset;
   });

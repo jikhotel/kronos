@@ -1,9 +1,11 @@
 """券商实盘网关。
 
 支持的通道:
-  - qmt      : miniQMT (迅投, xtquant Python API; 需本机运行已登录的 QMT 客户端)
-  - ths      : 同花顺客户端自动化 (easytrader; 需本机安装并登录同花顺客户端)
-  - paper    : 模拟盘(默认, 无需任何外部依赖)
+  - qmt       : miniQMT (迅投, xtquant Python API; 需本机运行已登录的 QMT 客户端, 仅 Windows)
+  - qmt_remote: 远程 QMT 通道(HTTP 桥接; 云端 Windows 跑 bridge/qmt_bridge.py + QMT,
+                Mac 通过网络远程下单, 见 bridge/部署指南.md)
+  - ths       : 同花顺客户端自动化 (easytrader; 需本机安装并登录同花顺客户端)
+  - paper     : 模拟盘(默认, 无需任何外部依赖)
 
 安全设计:
   - 密码加密存储(机器密钥派生 XOR+base64, 防明文直读); 真实资金请知悉风险
@@ -13,8 +15,11 @@
 
 import base64
 import hashlib
+import json
 import os
 import platform
+import urllib.request
+import urllib.error
 
 
 # ---------------- 密码加密(本地机器密钥派生) ----------------
@@ -135,6 +140,105 @@ class QmtBroker:
         return out
 
 
+class RemoteQmtBroker:
+    """远程 QMT 通道适配器 (HTTP 桥接)。
+
+    架构: 云端 Windows 机器运行 bridge/qmt_bridge.py(与 QMT 客户端同机),
+    本适配器通过 HTTP 远程调用其下单/查询接口, 使 Mac 等非 Windows 设备
+    也能接入 miniQMT 实盘。
+
+    config 字段:
+      - url   : 桥接服务地址, 如 http://1.2.3.4:17890 (必填)
+      - token : 桥接服务访问令牌 (必填)
+      - account_id : 资金账号(仅备注用途, 实际账号在云端配置)
+    """
+
+    name = 'QMT远程通道'
+
+    def __init__(self, config):
+        self.config = config
+        self.url = (config.get('url') or '').strip().rstrip('/')
+        self.token = config.get('token', '')
+        self.account_id = config.get('account_id', '')
+        if not self.url:
+            raise BrokerError('远程通道缺少 url 配置, 请填写云端桥接服务地址(如 http://IP:17890)')
+
+    # ---- HTTP 基础 ----
+    def _call(self, method, path, body=None, timeout=15):
+        req = urllib.request.Request(
+            self.url + path,
+            data=json.dumps(body).encode('utf-8') if body is not None else None,
+            method=method,
+            headers={'Content-Type': 'application/json',
+                     'X-Bridge-Token': self.token})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            try:
+                return json.loads(e.read().decode('utf-8'))
+            except Exception:
+                raise BrokerError(f'桥接服务返回 HTTP {e.code}')
+        except urllib.error.URLError as e:
+            raise BrokerError(
+                f'无法连接云端桥接服务 {self.url}: {e.reason}。'
+                '请确认: 1) 云服务器已启动 qmt_bridge.py; 2) 安全组已放行端口; '
+                '3) token 正确。部署说明见 bridge/部署指南.md')
+        except Exception as e:
+            raise BrokerError(f'桥接服务通信异常: {e}')
+
+    # ---- BrokerBase 兼容接口 ----
+    def get_cash(self):
+        r = self._call('GET', '/account')
+        if not r.get('ok'):
+            raise BrokerError(r.get('error', '查询资金失败'))
+        return float(r['cash'])
+
+    def test_connection(self):
+        r = self._call('GET', '/ping')
+        if not r.get('ok'):
+            return {'ok': False, 'message': r.get('error', '桥接服务不可达')}
+        if not r.get('qmt_connected'):
+            return {'ok': False,
+                    'message': f"桥接在线但 QMT 未就绪: {r.get('message', '')} "
+                               '(云端需启动并登录 QMT 客户端)'}
+        cash = ''
+        try:
+            cash = f", 可用资金 {self.get_cash():,.0f}"
+        except Exception:
+            pass
+        mode = 'mock' if r.get('mode') == 'mock' else '实盘'
+        acct = r.get('account') or self.account_id or '-'
+        return {'ok': True, 'mode': r.get('mode'),
+                'message': f"远程通道连接成功({mode}, 账号 {acct}{cash})"}
+
+    def buy(self, symbol, volume, price, reason, strategy=None):
+        return self._order(symbol, volume, price, reason, strategy, 'buy')
+
+    def sell(self, symbol, volume, price, reason, strategy=None):
+        return self._order(symbol, volume, price, reason, strategy, 'sell')
+
+    def _order(self, symbol, volume, price, reason, strategy, side):
+        try:
+            r = self._call('POST', '/order', {
+                'symbol': symbol, 'side': side, 'volume': int(volume),
+                'price': float(price), 'price_type': 'fix',
+                'strategy_name': (strategy or {}).get('name', 'kronos-quant'),
+                'remark': reason})
+        except BrokerError as e:
+            return {'status': 'rejected', 'reason': str(e)}
+        if not r.get('ok'):
+            return {'status': 'rejected', 'reason': r.get('error', '下单失败')}
+        return {'status': 'submitted', 'order_id': r.get('order_id'),
+                'volume': volume, 'price': price, 'reason': reason}
+
+    def positions(self):
+        r = self._call('GET', '/positions')
+        if not r.get('ok'):
+            raise BrokerError(r.get('error', '查询持仓失败'))
+        return r.get('positions') or []
+
+
 class ThsBroker:
     """同花顺客户端自动化适配器 (easytrader)。
 
@@ -213,6 +317,10 @@ BROKER_TYPES = {
     'qmt': {'label': 'QMT / miniQMT', 'class': QmtBroker,
             'desc': '券商 QMT 客户端 + xtquant Python 库; 支持完整订单回报, 最稳定的实盘通道',
             'fields': ['account_id', 'userdata_path', 'session_id']},
+    'qmt_remote': {'label': '远程 QMT 通道 (云端桥接)', 'class': RemoteQmtBroker,
+                   'desc': '云服务器 Windows 跑 qmt_bridge.py + QMT 客户端, 本机 HTTP 远程下单; '
+                           'Mac 可用。配置 url + token, 部署见 bridge/部署指南.md',
+                   'fields': ['url', 'token', 'account_id']},
     'ths': {'label': '同花顺客户端 (easytrader)',
             'class': ThsBroker,
             'desc': '同花顺下单客户端 UI 自动化; 门槛低但依赖客户端界面, 稳定性一般',
