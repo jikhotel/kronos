@@ -1,0 +1,30 @@
+Kronos QMT 桥接 — 云端部署速查（3 步）
+======================================
+
+前提: 云 Windows 已装 Python3(勾选 Add to PATH) + 国金 QMT 客户端已登录
+（QMT 内开启"独立交易 / miniQMT 极简模式"）。
+
+第 1 步: 把本文件夹整个拷到云服务器(如 D:\kronos-bridge\)
+       （RDP 剪贴板直接复制粘贴, 或浏览器到 github.com/jikhotel/kronos 下载）
+
+第 2 步: 右键编辑 start_bridge.bat, 修改一行:
+       set USERDATA=D:\QMT\userdata_mini   ← 改成你的 QMT 安装目录下 userdata_mini
+       (TOKEN 已预生成, 无需改动)
+       然后双击运行, 看到 "Kronos QMT 桥接服务" 横幅 + token 即成功。
+
+第 3 步: 云控制台安全组放行 TCP 17890 (来源填你家的出口 IP)。
+
+回到 Mac (Kronos WebUI → 量化交易 → 实盘 → 券商账户管理 → 添加账户):
+  券商通道: 远程 QMT 通道 (云端桥接)
+  资金账号: 40735103
+  交易密码: 留空
+  通道配置: {"url": "http://云服务器公网IP:17890", "token": "Vk9MmcbE6s7eNkrABR9u37qCtJH5YcYL"}
+  保存后点"测试连接" → 显示"远程通道连接成功, 可用资金 xxx"即大功告成。
+
+自启(可选, 推荐): 双击 install_autostart.bat, 以后每次开机登录自动拉起桥接。
+联调(可选): python qmt_bridge.py --mock 可在无 QMT 时模拟撮合测试。
+
+问题排查:
+  - "无法连接云端桥接服务" → 桥接没起 / 安全组没放行 / IP 填错
+  - "桥接在线但 QMT 未就绪" → 云端 QMT 客户端没登录或没开 miniQMT 模式
+  - "token 无效"          → 两边 token 不一致
