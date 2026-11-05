@@ -18,6 +18,7 @@ import requests
 
 from . import db
 from . import strategies as st
+from . import brokers as bk
 
 UA = {"User-Agent": "Mozilla/5.0"}
 QT_API = "https://qt.gtimg.cn/q={symbol}"
@@ -216,6 +217,48 @@ class PaperBroker(BrokerBase):
                 'price': exec_price, 'fee': fee}
 
 
+class _RealBrokerAdapter:
+    """统一适配真实券商 broker: 订单同步写入 SQLite 留痕(账本), 资金与持仓以券商为准。"""
+
+    def __init__(self, real_broker, acc_row):
+        self.real = real_broker
+        self.acc = acc_row
+        self.is_paper = False
+        self.name = real_broker.name
+        self.aid = db.ensure_account()
+
+    def get_cash(self):
+        return float(self.real.get_cash())
+
+    def buy(self, symbol, volume, price, reason, strategy=None):
+        strat = strategy or {}
+        r = self.real.buy(symbol, volume, price, reason, strategy=strat)
+        note = f"{reason} [实盘:{r.get('status')}"
+        if r.get('reason'):
+            note += f" {r['reason']}"
+        note += "]"
+        db.add_order(self.aid, strat.get('id'), strat.get('name'), symbol, 'BUY',
+                     price, volume, volume * price, r.get('status', 'unknown'), note)
+        return r
+
+    def sell(self, symbol, volume, price, reason, strategy=None):
+        strat = strategy or {}
+        r = self.real.sell(symbol, volume, price, reason, strategy=strat)
+        note = f"{reason} [实盘:{r.get('status')}"
+        if r.get('reason'):
+            note += f" {r['reason']}"
+        note += "]"
+        db.add_order(self.aid, strat.get('id'), strat.get('name'), symbol, 'SELL',
+                     price, volume, volume * price, r.get('status', 'unknown'), note)
+        return r
+
+    def positions(self):
+        try:
+            return self.real.positions() or []
+        except Exception:
+            return []
+
+
 # ---------------- Live Engine ----------------
 
 class LiveEngine:
@@ -228,6 +271,9 @@ class LiveEngine:
         if LiveEngine._instance is not None:
             raise RuntimeError("LiveEngine 是单例, 请用 LiveEngine.instance()")
         self.broker = None
+        self.paper = None             # 模拟盘 broker(实盘模式为 None)
+        self.broker_desc = 'paper(模拟盘)'
+        self.max_order_amount = 100000.0   # 实盘安全阀: 单笔最大下单金额
         self.predict_fn = None          # kronos 预测函数(可选注入)
         self.thread = None
         self.running = False
@@ -243,66 +289,126 @@ class LiveEngine:
                 cls._instance = LiveEngine()
             return cls._instance
 
-    def start(self, initial_cash=None, predict_fn=None):
+    def start(self, initial_cash=None, predict_fn=None, broker_account_id=None,
+              confirm_risk=False, max_order_amount=100000):
         if self.running:
             return True, "引擎已在运行"
-        if initial_cash is not None:
-            db.reset_account(initial_cash)
-        self.broker = PaperBroker()
+
+        broker_desc = 'paper(模拟盘)'
+        if broker_account_id:
+            # ---- 实盘通道: 需显式风险确认 ----
+            if not confirm_risk:
+                return False, "实盘通道需要勾选风险确认(真实资金交易)才能启动"
+            acc = db.get_broker_account(int(broker_account_id))
+            if not acc:
+                return False, f"券商账户不存在: {broker_account_id}"
+            try:
+                real_broker = bk.create_broker(acc['broker_type'],
+                                               {**(acc.get('config') or {}),
+                                                'account_id': acc.get('account_id', ''),
+                                                'password_enc': acc.get('password_enc', '')})
+                test = real_broker.test_connection()
+                if not test.get('ok'):
+                    return False, f"券商连接失败: {test.get('message')}"
+                self.broker = _RealBrokerAdapter(real_broker, acc)
+                self.paper = None
+                broker_desc = f"{real_broker.name} · {acc.get('account_id', '')} (实盘)"
+            except bk.BrokerError as e:
+                return False, str(e)
+            except Exception as e:
+                return False, f"券商通道初始化失败: {e}"
+        else:
+            if initial_cash is not None:
+                db.reset_account(initial_cash)
+            self.broker = PaperBroker()
+            self.paper = self.broker
+            real_broker = None
+
+        # 实盘安全阀: 单笔最大下单金额
+        self.max_order_amount = float(max_order_amount)
         self.predict_fn = predict_fn
+        self.broker_desc = broker_desc
         self.running = True
         self.thread = threading.Thread(target=self._loop, daemon=True, name='quant-live')
         self.thread.start()
-        return True, "实盘引擎已启动(模拟盘)"
+        return True, f"实盘引擎已启动 — {broker_desc}"
 
     def stop(self):
         self.running = False
         return True, "引擎已停止(持仓保留)"
 
     def status(self):
-        acct = db.get_account()
-        positions = db.get_positions()
-        market_value, pnl = 0.0, 0.0
-        for p in positions:
-            quote = get_realtime_quote(p['symbol'])
-            px = quote['price'] if quote else p['avg_cost']
-            market_value += px * p['volume']
-            pnl += (px - p['avg_cost']) * p['volume']
-        total = acct['cash'] + market_value
-        return {
-            'running': self.running,
-            'broker': 'paper(模拟盘)',
-            'poll_interval': self.poll_interval,
-            'last_cycle_at': self.last_cycle_at,
-            'last_error': self.last_error,
-            'account': {
-                'cash': round(acct['cash'], 2),
-                'market_value': round(market_value, 2),
-                'total': round(total, 2),
-                'initial_cash': round(acct['initial_cash'], 2),
+        is_live = self.paper is None and self.broker is not None and not getattr(self.broker, 'is_paper', True)
+        if is_live:
+            # 实盘: 资金/持仓以券商为准
+            try:
+                cash = self.broker.get_cash()
+            except Exception as e:
+                cash, self.last_error = 0.0, f"查询券商资金失败: {e}"
+            raw_positions = self.broker.positions()
+            market_value, position_pnl = 0.0, 0.0
+            positions = []
+            for p in raw_positions:
+                sym = p['symbol']
+                quote = get_realtime_quote(sym) if not sym.startswith(('hk',)) else None
+                px = quote['price'] if quote else p.get('avg_cost', 0)
+                mv = px * p['volume']
+                market_value += mv
+                positions.append({
+                    'symbol': sym, 'name': quote['name'] if quote else sym,
+                    'strategy_id': p.get('strategy_id', 0),
+                    'volume': p['volume'], 'available_volume': p.get('available_volume', p['volume']),
+                    'avg_cost': p.get('avg_cost', 0), 'price': px,
+                    'market_value': round(mv, 2), 'pnl': 0, 'pnl_pct': 0
+                })
+            total = cash + market_value
+            account = {
+                'cash': round(cash, 2), 'market_value': round(market_value, 2),
+                'total': round(total, 2), 'initial_cash': round(cash + market_value, 2),
+                'total_pnl': 0.0, 'total_pnl_pct': 0.0, 'position_pnl': 0.0
+            }
+        else:
+            # 模拟盘: SQLite 账本
+            acct = db.get_account()
+            raw_positions = db.get_positions()
+            positions, market_value, pnl = [], 0.0, 0.0
+            for p in raw_positions:
+                quote = get_realtime_quote(p['symbol'])
+                px = quote['price'] if quote else p['avg_cost']
+                market_value += px * p['volume']
+                pnl += (px - p['avg_cost']) * p['volume']
+                positions.append(self._position_view(p, quote, px))
+            total = acct['cash'] + market_value
+            account = {
+                'cash': round(acct['cash'], 2), 'market_value': round(market_value, 2),
+                'total': round(total, 2), 'initial_cash': round(acct['initial_cash'], 2),
                 'total_pnl': round(total - acct['initial_cash'], 2),
                 'total_pnl_pct': round((total / acct['initial_cash'] - 1) * 100, 2),
                 'position_pnl': round(pnl, 2)
-            },
-            'positions': self._positions_view(positions),
+            }
+        return {
+            'running': self.running,
+            'broker': self.broker_desc,
+            'is_live': is_live,
+            'max_order_amount': self.max_order_amount,
+            'poll_interval': self.poll_interval,
+            'last_cycle_at': self.last_cycle_at,
+            'last_error': self.last_error,
+            'account': account,
+            'positions': positions,
             'orders': db.list_orders(limit=50)
         }
 
-    def _positions_view(self, positions):
-        out = []
-        for p in positions:
-            quote = get_realtime_quote(p['symbol'])
-            px = quote['price'] if quote else p['avg_cost']
-            out.append({
-                'symbol': p['symbol'], 'name': quote['name'] if quote else p['symbol'],
-                'strategy_id': p['strategy_id'],
-                'volume': p['volume'], 'available_volume': p['available_volume'],
-                'avg_cost': round(p['avg_cost'], 3), 'price': px,
-                'market_value': round(px * p['volume'], 2),
-                'pnl': round((px - p['avg_cost']) * p['volume'], 2),
-                'pnl_pct': round((px / p['avg_cost'] - 1) * 100, 2) if p['avg_cost'] else 0
-            })
-        return out
+    def _position_view(self, p, quote, px):
+        return {
+            'symbol': p['symbol'], 'name': quote['name'] if quote else p['symbol'],
+            'strategy_id': p['strategy_id'],
+            'volume': p['volume'], 'available_volume': p['available_volume'],
+            'avg_cost': round(p['avg_cost'], 3), 'price': px,
+            'market_value': round(px * p['volume'], 2),
+            'pnl': round((px - p['avg_cost']) * p['volume'], 2),
+            'pnl_pct': round((px / p['avg_cost'] - 1) * 100, 2) if p['avg_cost'] else 0
+        }
 
     # ---- 主循环 ----
     def _loop(self):
@@ -347,24 +453,34 @@ class LiveEngine:
                 return
             target = int(sig.iloc[-1])
 
-        # 当前持仓
-        aid = db.ensure_account()
-        pos_rows = [p for p in db.get_positions(aid)
-                    if p['symbol'] == symbol and p['strategy_id'] == strat['id']]
-        cur_vol = pos_rows[0]['volume'] if pos_rows else 0
+        # 当前持仓: 实盘模式取券商持仓, 模拟盘取本地账本
+        cur_vol = 0
+        if getattr(self.broker, 'is_paper', True):
+            aid = db.ensure_account()
+            pos_rows = [p for p in db.get_positions(aid)
+                        if p['symbol'] == symbol and p['strategy_id'] == strat['id']]
+            cur_vol = pos_rows[0]['volume'] if pos_rows else 0
+        else:
+            for p in self.broker.positions():
+                if p['symbol'] == symbol:
+                    cur_vol = p['volume']
+                    break
+
+        quote = get_realtime_quote(symbol)
+        if not quote:
+            return
 
         if target == 1 and cur_vol == 0:
-            quote = get_realtime_quote(symbol)
-            if not quote:
-                return
             cash = self.broker.get_cash()
-            vol = int(cash * strat.get('position_ratio', 0.95) // (quote['price'] * 100)) * 100
+            budget = cash * strat.get('position_ratio', 0.95)
+            # 实盘安全阀: 单笔最大金额限制
+            if not getattr(self.broker, 'is_paper', True):
+                budget = min(budget, self.max_order_amount)
+            vol = int(budget // (quote['price'] * 100)) * 100
             if vol > 0:
                 self.broker.buy(symbol, vol, quote['price'], f"{strat['type']} 信号", strategy=strat)
         elif target == 0 and cur_vol > 0:
-            quote = get_realtime_quote(symbol)
-            if quote:
-                self.broker.sell(symbol, cur_vol, quote['price'], f"{strat['type']} 平仓", strategy=strat)
+            self.broker.sell(symbol, cur_vol, quote['price'], f"{strat['type']} 平仓", strategy=strat)
 
     def _kronos_target(self, strat, df):
         """kronos 策略: 每天最多预测一次(结果缓存), 避免高频推理。"""
@@ -388,8 +504,12 @@ class LiveEngine:
         return st.kronos_signal_from_pred(df['close'].iloc[-1], pred, threshold)
 
 
-def start_engine(initial_cash=None, predict_fn=None):
-    return LiveEngine.instance().start(initial_cash=initial_cash, predict_fn=predict_fn)
+def start_engine(initial_cash=None, predict_fn=None, broker_account_id=None,
+                 confirm_risk=False, max_order_amount=100000):
+    return LiveEngine.instance().start(
+        initial_cash=initial_cash, predict_fn=predict_fn,
+        broker_account_id=broker_account_id, confirm_risk=confirm_risk,
+        max_order_amount=max_order_amount)
 
 
 def stop_engine():

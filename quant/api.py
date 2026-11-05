@@ -229,20 +229,28 @@ def backtest_detail(rid):
     return jsonify(row)
 
 
-# ---------------- 实盘(模拟盘) ----------------
+# ---------------- 实盘(模拟盘/券商实盘) ----------------
 
 @quant_bp.route('/live/start', methods=['POST'])
 def live_start():
     data = request.get_json() or {}
     initial_cash = data.get('initial_cash')
-    reset = bool(data.get('reset', False))
+    broker_account_id = data.get('broker_account_id')   # 传则走真实券商通道
+    confirm_risk = bool(data.get('confirm_risk', False))
+    max_order_amount = data.get('max_order_amount', 100000)
     if initial_cash is not None:
         initial_cash = float(initial_cash)
+    if max_order_amount is not None:
+        max_order_amount = float(max_order_amount)
     ok, msg = live.start_engine(
-        initial_cash=initial_cash if reset else None,
-        predict_fn=_get_predict_fn()
+        initial_cash=initial_cash if not broker_account_id else None,
+        predict_fn=_get_predict_fn(),
+        broker_account_id=broker_account_id,
+        confirm_risk=confirm_risk,
+        max_order_amount=max_order_amount
     )
-    return jsonify({'success': ok, 'message': msg})
+    code = 200 if ok else 400
+    return jsonify({'success': ok, 'message': msg}), code
 
 
 @quant_bp.route('/live/stop', methods=['POST'])
@@ -262,3 +270,94 @@ def live_reset():
     cash = float(data.get('initial_cash', 1000000))
     db.reset_account(cash)
     return jsonify({'success': True, 'message': f'账户已重置, 初始资金 {cash:,.0f}'})
+
+
+# ---------------- 券商账户管理(实盘通道配置) ----------------
+
+@quant_bp.route('/broker-types')
+def broker_types():
+    from quant import brokers as bk
+    return jsonify({'types': {
+        k: {'label': v['label'], 'desc': v['desc'], 'fields': v['fields']}
+        for k, v in bk.BROKER_TYPES.items()}})
+
+
+@quant_bp.route('/broker-accounts', methods=['GET'])
+def list_broker_accounts():
+    return jsonify({'accounts': db.list_broker_accounts()})
+
+
+@quant_bp.route('/broker-accounts', methods=['POST'])
+def create_broker_account():
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    btype = data.get('broker_type') or ''
+    if not name:
+        return jsonify({'error': '账户名称不能为空'}), 400
+    from quant import brokers as bk
+    if btype not in bk.BROKER_TYPES:
+        return jsonify({'error': f'未知券商通道: {btype}'}), 400
+    try:
+        config = data.get('config') or {}
+        if isinstance(config, str):
+            import json as _json
+            config = _json.loads(config)
+    except Exception:
+        return jsonify({'error': 'config 必须是合法 JSON 对象'}), 400
+    row = db.create_broker_account({
+        'name': name, 'broker_type': btype,
+        'account_id': data.get('account_id', ''),
+        'password': data.get('password', ''),
+        'config': config, 'remark': data.get('remark', '')
+    })
+    out = dict(row)
+    out.pop('password_enc', None)
+    out.pop('password', None)
+    return jsonify({'success': True, 'account': out})
+
+
+@quant_bp.route('/broker-accounts/<int:bid>', methods=['PUT'])
+def update_broker_account(bid):
+    if not db.get_broker_account(bid):
+        return jsonify({'error': '账户不存在'}), 404
+    data = request.get_json() or {}
+    if 'config' in data and isinstance(data['config'], str):
+        try:
+            data['config'] = __import__('json').loads(data['config'])
+        except Exception:
+            return jsonify({'error': 'config 必须是合法 JSON 对象'}), 400
+    row = db.update_broker_account(bid, data)
+    out = dict(row or {})
+    out.pop('password_enc', None)
+    return jsonify({'success': True, 'account': out})
+
+
+@quant_bp.route('/broker-accounts/<int:bid>', methods=['DELETE'])
+def delete_broker_account(bid):
+    if not db.get_broker_account(bid):
+        return jsonify({'error': '账户不存在'}), 404
+    db.delete_broker_account(bid)
+    return jsonify({'success': True})
+
+
+@quant_bp.route('/broker-accounts/<int:bid>/test', methods=['POST'])
+def test_broker_account(bid):
+    """测试券商连接(不启动交易引擎)。"""
+    acc = db.get_broker_account(bid)
+    if not acc:
+        return jsonify({'error': '账户不存在'}), 404
+    from quant import brokers as bk
+    try:
+        broker = bk.create_broker(acc['broker_type'],
+                                  {**(acc.get('config') or {}),
+                                   'account_id': acc.get('account_id', ''),
+                                   'password_enc': acc.get('password_enc', '')})
+        if broker is None:
+            return jsonify({'success': True, 'ok': True, 'message': '模拟盘通道无需连接测试'})
+        result = broker.test_connection()
+        return jsonify({'success': True, **result})
+    except bk.BrokerError as e:
+        return jsonify({'success': False, 'ok': False, 'message': str(e)}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'ok': False,
+                        'message': f'连接失败: {type(e).__name__}: {e}'}), 200

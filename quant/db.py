@@ -107,6 +107,18 @@ CREATE TABLE IF NOT EXISTS orders (
     reason TEXT,
     created_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS broker_accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    broker_type TEXT NOT NULL,
+    account_id TEXT,
+    password_enc TEXT DEFAULT '',
+    config TEXT NOT NULL DEFAULT '{}',
+    remark TEXT DEFAULT '',
+    created_at TEXT,
+    updated_at TEXT
+);
 """
 
 
@@ -387,3 +399,104 @@ def list_orders(aid=None, limit=50):
             (aid, limit)).fetchall()
         conn.close()
     return [dict(r) for r in rows]
+
+
+# ---------------- 券商账户(实盘通道配置) ----------------
+
+def list_broker_accounts():
+    """列表视图: 密码永不返回(只返回是否已设置)。"""
+    with _lock:
+        conn = get_conn()
+        rows = conn.execute("SELECT * FROM broker_accounts ORDER BY id DESC").fetchall()
+        conn.close()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d['has_password'] = bool(d.pop('password_enc', ''))
+        try:
+            d['config'] = json.loads(d.get('config') or '{}')
+        except Exception:
+            d['config'] = {}
+        out.append(d)
+    return out
+
+
+def get_broker_account(bid):
+    """完整配置(含解密密码), 仅后端内部使用。"""
+    with _lock:
+        conn = get_conn()
+        r = conn.execute("SELECT * FROM broker_accounts WHERE id=?", (bid,)).fetchone()
+        conn.close()
+    if not r:
+        return None
+    d = dict(r)
+    try:
+        d['config'] = json.loads(d.get('config') or '{}')
+    except Exception:
+        d['config'] = {}
+    return d
+
+
+def create_broker_account(data):
+    from . import brokers as _br
+    config = data.get('config') or {}
+    if isinstance(config, str):
+        config = json.loads(config)
+    if data.get('password'):
+        config['password_enc'] = _br.encrypt_secret(data['password'])
+    with _lock:
+        conn = get_conn()
+        cur = conn.execute(
+            """INSERT INTO broker_accounts
+               (name, broker_type, account_id, password_enc, config, remark, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (data['name'], data['broker_type'], data.get('account_id', ''),
+             config.pop('password_enc', '') or '', json.dumps(config, ensure_ascii=False),
+             data.get('remark', ''), _now(), _now()))
+        bid = cur.lastrowid
+        conn.commit()
+        conn.close()
+    return get_broker_account(bid)
+
+
+def update_broker_account(bid, data):
+    from . import brokers as _br
+    existing = get_broker_account(bid)
+    if not existing:
+        return None
+    config = dict(existing['config'])
+    fields, vals = [], []
+    for col in ('name', 'broker_type', 'account_id', 'remark'):
+        if col in data and data[col] is not None:
+            fields.append(f"{col}=?")
+            vals.append(data[col])
+    if 'password' in data and data['password']:
+        enc = _br.encrypt_secret(data['password'])
+        fields.append("password_enc=?")
+        vals.append(enc)
+    if 'config' in data and data['config'] is not None:
+        newcfg = data['config']
+        if isinstance(newcfg, str):
+            newcfg = json.loads(newcfg)
+        config.update({k: v for k, v in newcfg.items() if k != 'password_enc'})
+    # 密码只存 password_enc 列, 永不写入 config JSON
+    config.pop('password_enc', None)
+    fields.append("config=?")
+    vals.append(json.dumps(config, ensure_ascii=False))
+    fields.append("updated_at=?")
+    vals.append(_now())
+    vals.append(bid)
+    with _lock:
+        conn = get_conn()
+        conn.execute(f"UPDATE broker_accounts SET {', '.join(fields)} WHERE id=?", vals)
+        conn.commit()
+        conn.close()
+    return get_broker_account(bid)
+
+
+def delete_broker_account(bid):
+    with _lock:
+        conn = get_conn()
+        conn.execute("DELETE FROM broker_accounts WHERE id=?", (bid,))
+        conn.commit()
+        conn.close()

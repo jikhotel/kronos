@@ -148,17 +148,47 @@ tr:hover td { background: #1c2128; }
 
   <!-- ============ Tab 3: 实盘 ============ -->
   <div id="tab-live" class="tab-pane">
+
+    <div class="card">
+      <h3>🏦 券商账户管理 <span class="muted">账号密码本地加密存储, 仅用于连接你自己的券商客户端</span></h3>
+      <div class="form-grid" style="margin-bottom: 6px;">
+        <div class="form-item"><label>账户名称</label><input id="ba-name" placeholder="如: 国金QMT主账户"></div>
+        <div class="form-item"><label>券商通道</label><select id="ba-type"></select></div>
+        <div class="form-item"><label>资金账号</label><input id="ba-account" placeholder="券商资金账号"></div>
+        <div class="form-item"><label>密码(交易密码)</label><input id="ba-password" type="password" placeholder="同花顺通道必填, QMT可留空"></div>
+        <div class="form-item full"><label>通道配置 (JSON: QMT填 userdata_path, 同花顺填 client_path)</label><textarea id="ba-config" style="min-height:56px">{}</textarea></div>
+        <div class="form-item full"><label>备注</label><input id="ba-remark" placeholder="可选"></div>
+      </div>
+      <div class="row">
+        <button class="btn" onclick="createBrokerAccount()">➕ 添加账户</button>
+        <span class="muted" id="ba-type-desc"></span>
+      </div>
+      <div style="margin-top: 14px;"><table>
+        <thead><tr><th>ID</th><th>名称</th><th>通道</th><th>资金账号</th><th>密码</th><th>备注</th><th>操作</th></tr></thead>
+        <tbody id="ba-tbody"><tr><td colspan="7" class="empty">暂无券商账户(仅模拟盘时无需配置)</td></tr></tbody>
+      </table></div>
+    </div>
+
     <div class="card">
       <h3><span class="live-dot off" id="live-dot"></span>实盘引擎 <span class="muted" id="live-engine-msg"></span></h3>
-      <div class="row" style="margin-bottom: 10px;">
-        <span class="muted">当前通道: 模拟盘(Paper) · 实时行情驱动 · A股规则(T+1/整手/涨跌停)</span>
+      <div class="form-grid" style="margin-bottom: 10px;">
+        <div class="form-item"><label>交易通道</label>
+          <select id="live-channel">
+            <option value="">🧪 模拟盘 (Paper, 默认)</option>
+          </select>
+        </div>
+        <div class="form-item"><label>模拟盘初始资金(元)</label><input id="live-cash" type="number" value="1000000"></div>
+        <div class="form-item"><label>实盘单笔限额(元)</label><input id="live-max-order" type="number" value="100000" title="实盘安全阀: 单笔下单金额上限"></div>
+      </div>
+      <div class="row" style="margin-bottom: 8px;">
+        <label class="muted" id="risk-confirm-wrap" style="display:none">
+          <input type="checkbox" id="live-confirm-risk"> ⚠️ 我已知晓<strong style="color:#f85149">真实资金交易风险</strong>, 确认用该券商账户自动下单
+        </label>
+        <label class="muted"><input type="checkbox" id="live-reset"> 模拟盘启动时重置账户</label>
       </div>
       <div class="row">
         <button class="btn success" id="live-start-btn" onclick="startLive()">🚀 启动引擎</button>
         <button class="btn warn" id="live-stop-btn" onclick="stopLive()" disabled>⏸ 停止引擎</button>
-        <label class="muted"><input type="checkbox" id="live-reset"> 启动时重置账户</label>
-        <input id="live-cash" type="number" value="1000000" style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:6px 10px;width:130px" title="初始资金">
-        <span class="muted">元</span>
       </div>
     </div>
     <div class="card">
@@ -411,15 +441,107 @@ async function viewBacktest(id) {
   document.getElementById('bt-result-card').scrollIntoView({behavior: 'smooth'});
 }
 
-// ============ 实盘 ============
+// ============ 实盘: 券商账户管理 ============
+let brokerTypes = {}, brokerAccounts = [];
+
+async function loadBrokerTypes() {
+  const res = await axios.get('/api/quant/broker-types');
+  brokerTypes = res.data.types;
+  const sel = document.getElementById('ba-type');
+  sel.innerHTML = Object.entries(brokerTypes)
+    .filter(([k]) => k !== 'paper')
+    .map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('');
+  sel.addEventListener('change', () => {
+    const t = brokerTypes[sel.value] || {};
+    document.getElementById('ba-type-desc').textContent = t.desc || '';
+    const preset = sel.value === 'qmt' ? JSON.stringify({userdata_path: 'D:\\\\国金QMT交易端\\\\userdata_mini', session_id: 888888}, null, 2)
+                 : sel.value === 'ths' ? JSON.stringify({client_path: 'C:\\\\同花顺软件\\\\xiadan.exe'}, null, 2) : '{}';
+    document.getElementById('ba-config').value = preset;
+  });
+}
+
+async function loadBrokerAccounts() {
+  const res = await axios.get('/api/quant/broker-accounts');
+  brokerAccounts = res.data.accounts;
+  renderBrokerAccounts();
+}
+
+function renderBrokerAccounts() {
+  const tb = document.getElementById('ba-tbody');
+  tb.innerHTML = brokerAccounts.length ? brokerAccounts.map(a => `
+    <tr>
+      <td>${a.id}</td><td>${a.name}</td>
+      <td>${(brokerTypes[a.broker_type] || {}).label || a.broker_type}</td>
+      <td>${a.account_id || '-'}</td>
+      <td>${a.has_password ? '已设置' : '-'}</td>
+      <td class="muted">${a.remark || ''}</td>
+      <td>
+        <button class="btn small" onclick="testBrokerAccount(${a.id})">🔌 测试连接</button>
+        <button class="btn small danger" onclick="deleteBrokerAccount(${a.id})">删除</button>
+      </td>
+    </tr>`).join('')
+    : '<tr><td colspan="7" class="empty">暂无券商账户(仅模拟盘时无需配置)</td></tr>';
+  // 刷新引擎通道选择
+  const sel = document.getElementById('live-channel');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">🧪 模拟盘 (Paper, 默认)</option>' +
+    brokerAccounts.map(a => `<option value="${a.id}">🔴 实盘: ${a.name} (${(brokerTypes[a.broker_type] || {}).label || a.broker_type})</option>`).join('');
+  if (cur) sel.value = cur;
+  sel.onchange = () => {
+    document.getElementById('risk-confirm-wrap').style.display = sel.value ? 'inline-block' : 'none';
+  };
+}
+
+async function createBrokerAccount() {
+  let config;
+  try { config = JSON.parse(document.getElementById('ba-config').value || '{}'); }
+  catch (e) { return showStatus('err', '通道配置不是合法 JSON'); }
+  const res = await axios.post('/api/quant/broker-accounts', {
+    name: document.getElementById('ba-name').value,
+    broker_type: document.getElementById('ba-type').value,
+    account_id: document.getElementById('ba-account').value,
+    password: document.getElementById('ba-password').value,
+    config, remark: document.getElementById('ba-remark').value
+  });
+  if (res.data.success) {
+    showStatus('ok', `券商账户「${res.data.account.name}」已保存(密码已加密)`);
+    document.getElementById('ba-password').value = '';
+    loadBrokerAccounts();
+  } else showStatus('err', res.data.error);
+}
+
+async function testBrokerAccount(id) {
+  showStatus('ok', '正在测试连接...');
+  const res = await axios.post(`/api/quant/broker-accounts/${id}/test`);
+  if (res.data.ok) showStatus('ok', res.data.message || '连接成功');
+  else showStatus('err', res.data.message || '连接失败');
+}
+
+async function deleteBrokerAccount(id) {
+  if (!confirm('确认删除该券商账户配置?')) return;
+  const res = await axios.delete(`/api/quant/broker-accounts/${id}`);
+  if (res.data.success) { showStatus('ok', '已删除'); loadBrokerAccounts(); }
+  else showStatus('err', res.data.error);
+}
+
+// ============ 实盘引擎 ============
 let liveTimer = null;
 
 async function startLive() {
-  const body = {initial_cash: +document.getElementById('live-cash').value || 1000000,
-                reset: document.getElementById('live-reset').checked};
+  const channelId = document.getElementById('live-channel').value;
+  const isLive = !!channelId;
+  const confirmRisk = document.getElementById('live-confirm-risk').checked;
+  if (isLive && !confirmRisk) return showStatus('err', '实盘通道必须先勾选风险确认');
+  const body = {
+    broker_account_id: channelId ? +channelId : null,
+    confirm_risk: confirmRisk,
+    max_order_amount: +document.getElementById('live-max-order').value || 100000,
+    initial_cash: +document.getElementById('live-cash').value || 1000000,
+    reset: document.getElementById('live-reset').checked
+  };
   const res = await axios.post('/api/quant/live/start', body);
   if (res.data.success) { showStatus('ok', res.data.message); refreshLive(); }
-  else showStatus('err', res.data.error || '启动失败');
+  else showStatus('err', res.data.message || res.data.error || '启动失败');
 }
 
 async function stopLive() {
@@ -435,8 +557,11 @@ async function refreshLive() {
     document.getElementById('live-dot').className = 'live-dot ' + (running ? 'on' : 'off');
     document.getElementById('live-start-btn').disabled = running;
     document.getElementById('live-stop-btn').disabled = !running;
+    const liveTag = d.is_live ? ' · 🔴 实盘' : '';
     document.getElementById('live-engine-msg').textContent =
-      (running ? `运行中 · 每 ${d.poll_interval}s 轮询 · 上次: ${d.last_cycle_at || '-'}` : '已停止') +
+      (running ? `运行中${liveTag} · ${d.broker} · 每 ${d.poll_interval}s 轮询 · 上次: ${d.last_cycle_at || '-'}`
+               : '已停止') +
+      (d.is_live ? ` · 单笔限额 ${fmt(d.max_order_amount)} 元` : '') +
       (d.last_error ? ` · ⚠ ${d.last_error}` : '');
 
     const a = d.account;
@@ -475,6 +600,7 @@ async function refreshLive() {
 loadStrategyTypes().then(() => loadStrategies());
 loadFiles();
 loadBacktestHistory();
+loadBrokerTypes().then(() => loadBrokerAccounts());
 refreshLive();
 </script>
 </body>
