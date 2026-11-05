@@ -531,7 +531,12 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
 
 @app.route('/')
 def index():
-    """Home page"""
+    """平台首页: 预测 / 量化 双入口"""
+    return render_template('home.html')
+
+@app.route('/predict')
+def predict_page():
+    """K 线预测页面(原首页)"""
     return render_template('index.html')
 
 @app.route('/api/data-files')

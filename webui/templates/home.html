@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kronos 量化研究平台</title>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0d1117; color: #e6edf3; min-height: 100vh;
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 40px 20px;
+  background-image: radial-gradient(ellipse 900px 500px at 50% -10%, rgba(31,111,235,.12), transparent),
+                    radial-gradient(ellipse 700px 400px at 85% 110%, rgba(88,213,240,.06), transparent);
+}
+.hero { text-align: center; margin-bottom: 46px; }
+.hero h1 {
+  font-size: 34px; background: linear-gradient(90deg, #58d5f0, #1f6feb);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero p { color: #8b949e; margin-top: 10px; font-size: 15px; letter-spacing: 1px; }
+.hero .badges { margin-top: 14px; }
+.badge {
+  display: inline-block; padding: 3px 12px; margin: 0 4px; border-radius: 12px;
+  font-size: 12px; border: 1px solid #30363d; color: #8b949e;
+}
+.badge.hl { color: #58d5f0; border-color: rgba(88,213,240,.4); }
+
+.cards { display: flex; gap: 26px; flex-wrap: wrap; justify-content: center; max-width: 1000px; }
+.card {
+  width: 420px; background: #161b22; border: 1px solid #21262d; border-radius: 14px;
+  padding: 30px 28px; cursor: pointer; position: relative; overflow: hidden;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  text-decoration: none; color: #e6edf3; display: block;
+}
+.card:hover {
+  transform: translateY(-5px); border-color: #58d5f0;
+  box-shadow: 0 12px 40px rgba(31,111,235,.22);
+}
+.card .icon { font-size: 44px; margin-bottom: 14px; }
+.card h2 { font-size: 21px; margin-bottom: 10px; }
+.card h2 .arrow { color: #58d5f0; transition: margin-left .18s ease; }
+.card:hover h2 .arrow { margin-left: 8px; }
+.card p { color: #8b949e; font-size: 13.5px; line-height: 1.8; }
+.card .tags { margin-top: 16px; }
+.tag {
+  display: inline-block; font-size: 12px; color: #8b949e;
+  background: #0d1117; border: 1px solid #21262d;
+  padding: 3px 10px; border-radius: 6px; margin: 0 6px 6px 0;
+}
+.card.predict:hover { border-color: #58d5f0; }
+.card.quant:hover { border-color: #3fb950; box-shadow: 0 12px 40px rgba(35,134,54,.20); }
+.card.quant h2 .arrow { color: #3fb950; }
+
+.status-bar {
+  margin-top: 48px; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+}
+.st {
+  background: #161b22; border: 1px solid #21262d; border-radius: 8px;
+  padding: 8px 18px; font-size: 12.5px; color: #8b949e;
+}
+.st b { color: #e6edf3; font-weight: 500; margin-left: 6px; }
+.st .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.dot.on { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+.dot.off { background: #8b949e; }
+footer { margin-top: 34px; color: #484f58; font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="hero">
+    <h1>🜂 Kronos 量化研究平台</h1>
+    <p>清华开源 K 线基础模型 · 本地部署 · 预测与量化一体化</p>
+    <div class="badges">
+      <span class="badge hl">全程本地运行</span>
+      <span class="badge">A股 + 港股</span>
+      <span class="badge">CPU 推理</span>
+      <span class="badge">v1.1</span>
+    </div>
+  </div>
+
+  <div class="cards">
+    <a class="card predict" href="/predict">
+      <div class="icon">📈</div>
+      <h2>K 线预测 <span class="arrow">→</span></h2>
+      <p>基于 Kronos 金融基础模型，对任意 A股/港股标的做未来走势预测与历史回测。同花顺风格 K 线图，支持缩放拖动与成交量/成交额/换手率切换。</p>
+      <div class="tags">
+        <span class="tag">未来走势预测</span><span class="tag">历史回测</span>
+        <span class="tag">实时导入数据</span><span class="tag">同花顺风格</span>
+      </div>
+    </a>
+
+    <a class="card quant" href="/quant">
+      <div class="icon">🤖</div>
+      <h2>量化交易 <span class="arrow">→</span></h2>
+      <p>策略管理 · 回测 · 实盘交易闭环。内置双均线/MACD/RSI/布林带/Kronos 预测五类策略，模拟盘实时行情撮合，预留券商实盘网关。</p>
+      <div class="tags">
+        <span class="tag">策略管理</span><span class="tag">绩效回测</span>
+        <span class="tag">模拟实盘</span><span class="tag">T+1 / 涨跌停</span>
+      </div>
+    </a>
+  </div>
+
+  <div class="status-bar">
+    <span class="st">模型 <b id="st-model">检查中...</b></span>
+    <span class="st">数据文件 <b id="st-files">-</b></span>
+    <span class="st">量化策略 <b id="st-strategies">-</b></span>
+    <span class="st">实盘引擎 <b id="st-live">-</b></span>
+  </div>
+
+  <footer>基于 shiyu-coder/Kronos (MIT) · 本地增强版 · macOS CPU</footer>
+
+<script>
+(async () => {
+  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  try {
+    const [m, f, s] = await Promise.all([
+      axios.get('/api/model-status').catch(() => null),
+      axios.get('/api/data-files').catch(() => null),
+      axios.get('/api/quant/strategies').catch(() => null)
+    ]);
+    if (m && m.data) {
+      const d = m.data;
+      const dot = d.loaded ? '<span class="dot on"></span>' : '<span class="dot off"></span>';
+      set('st-model', `${dot}${d.loaded ? (d.model_info?.name || '已加载') : '未加载'}`);
+    } else set('st-model', '<span class="dot off"></span>不可用');
+    if (f && f.data) set('st-files', (f.data.length || 0) + ' 个');
+    if (s && s.data) {
+      const n = (s.data.strategies || []).length;
+      const act = (s.data.strategies || []).filter(x => x.status === 'active').length;
+      set('st-strategies', `${n} 个${act ? ` · ${act} 运行` : ''}`);
+    } else set('st-strategies', '0 个');
+  } catch (e) { /* ignore */ }
+  try {
+    const l = await axios.get('/api/quant/live/status');
+    const run = l.data.running;
+    set('st-live', run ? '<span class="dot on"></span>运行中(模拟盘)' : '<span class="dot off"></span>已停止');
+  } catch (e) { set('st-live', '<span class="dot off"></span>已停止'); }
+})();
+</script>
+</body>
+</html>

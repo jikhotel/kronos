@@ -2,11 +2,20 @@
 
   <h2><b>Kronos-WebUI 本地增强版</b></h2>
 
-  <img src="https://img.shields.io/badge/version-1.0-blue" alt="v1.0">
+  <img src="https://img.shields.io/badge/version-1.1-blue" alt="v1.1">
   <img src="https://img.shields.io/badge/platform-macOS%20CPU-lightgrey" alt="platform">
   <img src="https://img.shields.io/badge/stocks-A%E8%82%A1%20%2B%20%E6%B8%AF%E8%82%A1-red" alt="A+HK">
 
 </div>
+
+## 🚀 v1.1 版本说明（2026-11-05）
+
+1. **平台首页**（`/`）：K 线预测与量化交易双卡片入口，底部实时状态概览（模型加载 / 数据文件 / 策略数 / 实盘引擎）；原预测页移至 `/predict`，三页面导航闭环
+2. **策略描述 / 交易逻辑**：策略管理支持为每个策略记录交易逻辑说明；5 类内置策略均附带完整逻辑介绍（信号规则、适用行情、参数含义），新建策略时自动填充、可编辑，策略列表新增「交易逻辑」列；旧库自动迁移并回填
+3. **kronos半年策略示例**：基于 Kronos 半年展望（horizon=120、±5% 阈值）的策略与 10 只随机股票批量回测结果入库（策略库 #3 / 回测记录 #2–#11），4 笔触发交易全部盈利
+4. **数据扩充**：新增 002669 / 300456 / 300607 / 600487 日线前复权数据，日线标的达 10 只
+
+<details><summary><b>📦 v1.0 版本说明</b></summary>
 
 ## 📦 本地增强版 v1.0
 
@@ -17,6 +26,8 @@ Changes（基于清华开源 [shiyu-coder/Kronos](https://github.com/shiyu-coder
 3. 增加选股器，连接腾讯获取实时数据
 4. 增加分钟k线预测
 5. 修复页面显示bug，选股下拉问题，数据修改
+
+</details>
 
 ### 快速启动
 

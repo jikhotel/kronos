@@ -94,6 +94,7 @@ def create_strategy():
 
     row = db.create_strategy({
         'name': name, 'type': stype, 'params': params, 'symbol': resolved,
+        'description': (data.get('description') or '').strip() or st.STRATEGY_TYPES.get(stype, {}).get('desc', ''),
         'freq': data.get('freq') or 'day',
         'initial_capital': data.get('initial_capital', 100000),
         'commission_rate': data.get('commission_rate', 0.0003),

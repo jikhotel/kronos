@@ -25,9 +25,17 @@ def get_conn():
     if not _initialized:
         # 首次连接自动建表(幂等), 保证独立调用时无需显式 init_db
         conn.executescript(_SCHEMA)
+        _migrate(conn)
         conn.commit()
         _initialized = True
     return conn
+
+
+def _migrate(conn):
+    """已存在的旧库增量迁移(幂等)。"""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(strategies)").fetchall()}
+    if 'description' not in cols:
+        conn.execute("ALTER TABLE strategies ADD COLUMN description TEXT DEFAULT ''")
 
 
 _SCHEMA = """
@@ -35,6 +43,7 @@ CREATE TABLE IF NOT EXISTS strategies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
+    description TEXT DEFAULT '',
     params TEXT NOT NULL DEFAULT '{}',
     symbol TEXT NOT NULL,
     freq TEXT DEFAULT 'day',
@@ -141,10 +150,11 @@ def create_strategy(data):
         conn = get_conn()
         cur = conn.execute(
             """INSERT INTO strategies
-               (name, type, params, symbol, freq, initial_capital, commission_rate,
-                slippage, position_ratio, status, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (data['name'], data['type'], json.dumps(data.get('params', {}), ensure_ascii=False),
+               (name, type, description, params, symbol, freq, initial_capital,
+                commission_rate, slippage, position_ratio, status, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (data['name'], data['type'], data.get('description', ''),
+             json.dumps(data.get('params', {}), ensure_ascii=False),
              data['symbol'], data.get('freq', 'day'),
              float(data.get('initial_capital', 100000)),
              float(data.get('commission_rate', 0.0003)),
@@ -159,7 +169,7 @@ def create_strategy(data):
 
 def update_strategy(sid, data):
     fields, vals = [], []
-    for col in ('name', 'type', 'symbol', 'freq', 'status'):
+    for col in ('name', 'type', 'symbol', 'freq', 'status', 'description'):
         if col in data and data[col] is not None:
             fields.append(f"{col}=?")
             vals.append(data[col])
