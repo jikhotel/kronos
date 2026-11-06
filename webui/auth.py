@@ -168,12 +168,15 @@ def verify_login(username, password, ip=''):
     if not row['enabled']:
         log_op(username, '登录', '失败(账号已禁用)', 403)
         return None
-    with _lock:
-        c = _conn()
-        c.execute("UPDATE users SET last_login_at=?, last_login_ip=? WHERE id=?",
-                  (time.strftime('%Y-%m-%d %H:%M:%S'), ip, row['id']))
-        c.commit()
-        c.close()
+    try:
+        with _lock:
+            c = _conn()
+            c.execute("UPDATE users SET last_login_at=?, last_login_ip=? WHERE id=?",
+                      (time.strftime('%Y-%m-%d %H:%M:%S'), ip, row['id']))
+            c.commit()
+            c.close()
+    except Exception:
+        pass  # 登录留痕失败不阻断登录
     log_op(username, '登录', '成功', 200)
     return {'id': row['id'], 'username': row['username'], 'role': row['role']}
 
