@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kronos Financial Prediction Web UI v1.1</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/static/plotly-2.27.0.min.js"></script>
+    <script src="/static/axios.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -1391,6 +1391,11 @@
         // Display prediction results
         function displayPredictionResult(result) {
             // Display chart
+            if (typeof Plotly === 'undefined') {
+                showStatus('error', '图表库(Plotly)未加载成功, 请刷新页面重试; 若反复失败请检查网络');
+                console.error('Plotly 未加载, 无法绘图');
+                return;
+            }
             const chartData = JSON.parse(result.chart);
             // scrollZoom: 鼠标滚轮缩放; dragmode=pan(来自布局): 左键拖动平移; 两者叠加实现缩放+左右拖动
             Plotly.newPlot('chart', chartData.data, chartData.layout, {
