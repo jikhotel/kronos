@@ -1136,6 +1136,39 @@ except Exception as _quant_err:
     QUANT_AVAILABLE = False
     print(f"Warning: quant subsystem unavailable: {_quant_err}")
 
+
+# ============================================================
+# 启动自动加载模型(可 KRONOS_AUTOLOAD=0 关闭, KRONOS_AUTO_MODEL 换模型)
+# 服务重启后无需手动 Load Model 即可直接预测/回测
+# ============================================================
+import threading
+
+
+def _auto_load_model():
+    import time as _time
+    _time.sleep(8)
+    try:
+        if not MODEL_AVAILABLE:
+            return
+        key = os.environ.get('KRONOS_AUTO_MODEL', 'kronos-small')
+        cfg = AVAILABLE_MODELS.get(key)
+        if not cfg:
+            print(f"[auto-load] 未知模型 {key}, 跳过")
+            return
+        global tokenizer, model, predictor
+        tokenizer = KronosTokenizer.from_pretrained(cfg['tokenizer_id'])
+        model = Kronos.from_pretrained(cfg['model_id'])
+        predictor = KronosPredictor(model, tokenizer, device='cpu',
+                                    max_context=cfg['context_length'])
+        print(f"[auto-load] {cfg['name']} 已自动加载(cpu)")
+    except Exception as _e:
+        print(f"[auto-load] 模型自动加载失败(可在页面手动加载): {_e}")
+
+
+if os.environ.get('KRONOS_AUTOLOAD', '1') != '0':
+    threading.Thread(target=_auto_load_model, daemon=True).start()
+
+
 if __name__ == '__main__':
     print("Starting Kronos Web UI...")
     print(f"Model availability: {MODEL_AVAILABLE}")

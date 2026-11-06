@@ -24,6 +24,7 @@ import csv
 import json
 import os
 import sys
+import time
 from datetime import date, timedelta
 
 import requests
@@ -76,28 +77,77 @@ def resolve_symbol(code: str) -> str:
     return symbol_of(digits)
 
 
-def fetch_window(symbol: str, freq: str, fq: str, start: date, end: date):
-    """拉取单个时间窗口"""
+def _fetch_tencent_window(symbol: str, freq: str, fq: str, start: date, end: date):
+    """腾讯窗口拉取, 带重试(应对 CDN/WAF 偶发 501)。成功返回 rows, 失败返回 None。"""
     param = (f"{symbol},{freq},{start.isoformat()},{end.isoformat()},{PAGE_LIMIT},{fq}")
-    r = requests.get(API, params={"param": param}, timeout=30, headers=UA)
-    r.raise_for_status()
-    data = r.json().get("data")
-    if not isinstance(data, dict) or symbol not in data:
+    last_err = "unknown"
+    for attempt in range(3):
+        try:
+            r = requests.get(API, params={"param": param}, timeout=30, headers=UA)
+            if r.status_code == 200:
+                data = r.json().get("data")
+                if isinstance(data, dict) and symbol in data:
+                    node = data[symbol]
+                    # 前/后复权结果在 qfqday / hfqday 键下, 不复权在 day / <freq> 键下
+                    for key in (f"{fq}{freq}", freq, f"{fq}day", "day"):
+                        if node.get(key):
+                            return node[key]
+                    return []
+                return []  # 200 但无数据
+            last_err = f"HTTP {r.status_code}"
+        except Exception as e:
+            last_err = str(e)[:80]
+        time.sleep(2 + attempt * 3)
+    print(f"[warn] 腾讯接口失败({last_err}), 切换东方财富兜底: {symbol} {freq}")
+    return None
+
+
+def _fetch_em_window(symbol: str, freq: str, fq: str, start: date, end: date):
+    """东方财富兜底 K 线, 输出对齐腾讯行格式 [日期,开,收,高,低,成交量(手)]。
+    一次返回区间内全部数据(不分页), 港股不支持返回空。"""
+    secid = _eastmoney_secid(symbol)
+    if not secid:
         return []
-    node = data[symbol]
-    # 前/后复权结果在 qfqday / hfqday 键下, 不复权在 day / <freq> 键下
-    for key in (f"{fq}{freq}", freq, f"{fq}day", "day"):
-        if node.get(key):
-            return node[key]
-    return []
+    try:
+        r = requests.get(EM_API, params={
+            "secid": secid, "fields1": "f1,f2,f3",
+            "fields2": "f51,f52,f53,f54,f55,f56",
+            "klt": EM_KLT.get(freq, "101"), "fqt": EM_FQT.get(fq, "1"),
+            "beg": start.strftime("%Y%m%d"), "end": end.strftime("%Y%m%d"),
+            "lmt": "1000000",
+        }, timeout=30, headers=UA)
+        r.raise_for_status()
+        data = r.json().get("data")
+        if not data or not data.get("klines"):
+            return []
+        rows = []
+        for line in data["klines"]:
+            p = line.split(",")
+            if len(p) >= 6:
+                rows.append([p[0], p[1], p[2], p[3], p[4], p[5]])
+        return rows
+    except Exception as e:
+        print(f"[warn] 东方财富兜底也失败: {e}")
+        return []
+
+
+def fetch_window(symbol: str, freq: str, fq: str, start: date, end: date):
+    """拉取单个时间窗口: 腾讯(重试) -> 东方财富兜底。"""
+    rows = _fetch_tencent_window(symbol, freq, fq, start, end)
+    if rows is not None:
+        return rows
+    return _fetch_em_window(symbol, freq, fq, start, end)
 
 
 def fetch_range(symbol: str, freq: str, fq: str, start: date, end: date, depth: int = 0):
     """
     拉取 [start, end] 区间的 K 线。
-    若单次返回达到 PAGE_LIMIT, 说明被服务端截断, 则对半递归再分, 直到每段都不触顶。
+    腾讯源: 若单次返回达到 PAGE_LIMIT, 说明被服务端截断, 则对半递归再分;
+    东财兜底: 一次给全区间数据, 无需递归。
     """
-    rows = fetch_window(symbol, freq, fq, start, end)
+    rows = _fetch_tencent_window(symbol, freq, fq, start, end)
+    if rows is None:
+        return _fetch_em_window(symbol, freq, fq, start, end)
     if len(rows) >= PAGE_LIMIT and start < end and depth < 8:
         mid = start + (end - start) // 2
         if start < mid < end:
