@@ -109,6 +109,15 @@ footer { margin-top: 34px; color: #484f58; font-size: 12px; }
     <span class="st">实盘引擎 <b id="st-live">-</b></span>
   </div>
 
+  {% if u %}
+  <div class="status-bar" style="margin-top:16px">
+    <span class="st">👤 <b>{{ u.username }}</b>{% if u.role == 'admin' %} · 管理员{% endif %}</span>
+    {% if u.role == 'admin' %}<a class="st" href="/admin" style="text-decoration:none">⚙️ 用户管理</a>{% endif %}
+    <a class="st" href="/account" style="text-decoration:none">🔑 修改密码</a>
+    <a class="st" href="/logout" style="text-decoration:none;color:#f85149">退出登录</a>
+  </div>
+  {% endif %}
+
   <footer>基于 shiyu-coder/Kronos (MIT) · 本地增强版 · macOS CPU</footer>
 
 <script>

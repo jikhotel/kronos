@@ -571,6 +571,12 @@
             <p style="margin-top:8px">
                 <a href="/" style="color:#58a6ff;font-size:13px;text-decoration:none;border:1px solid #30363d;padding:5px 14px;border-radius:6px">🏠 平台首页</a>
                 <a href="/quant" style="color:#3fb950;font-size:13px;text-decoration:none;border:1px solid #30363d;padding:5px 14px;border-radius:6px;margin-left:10px">🤖 量化交易 →</a>
+                {% if u %}
+                <span style="color:#8b949e;font-size:13px;border:1px solid #30363d;padding:5px 14px;border-radius:6px;margin-left:10px">👤 {{ u.username }}{% if u.role == 'admin' %} · admin{% endif %}</span>
+                {% if u.role == 'admin' %}<a href="/admin" style="color:#d29922;font-size:13px;text-decoration:none;border:1px solid #30363d;padding:5px 14px;border-radius:6px;margin-left:10px">⚙️ 用户管理</a>{% endif %}
+                <a href="/account" style="color:#8b949e;font-size:13px;text-decoration:none;border:1px solid #30363d;padding:5px 14px;border-radius:6px;margin-left:10px">🔑 改密</a>
+                <a href="/logout" style="color:#f85149;font-size:13px;text-decoration:none;border:1px solid #30363d;padding:5px 14px;border-radius:6px;margin-left:10px">退出登录</a>
+                {% endif %}
             </p>
         </div>
 

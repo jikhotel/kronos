@@ -70,6 +70,12 @@ tr:hover td { background: #1c2128; }
     <h1>🤖 Kronos 量化交易系统 <span>策略管理 · 回测 · 实盘</span></h1>
     <a class="back-link" href="/predict">📈 K 线预测</a>
     <a class="back-link" href="/">🏠 首页</a>
+    {% if u %}
+    <span class="back-link" style="cursor:default">👤 {{ u.username }}{% if u.role == 'admin' %} · admin{% endif %}</span>
+    {% if u.role == 'admin' %}<a class="back-link" href="/admin">⚙️ 用户管理</a>{% endif %}
+    <a class="back-link" href="/account">🔑 改密</a>
+    <a class="back-link" href="/logout">退出登录</a>
+    {% endif %}
   </header>
 
   <div class="tabs">

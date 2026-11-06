@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录 · Kronos 量化研究平台</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0d1117; color: #e6edf3; min-height: 100vh;
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 40px 20px;
+  background-image: radial-gradient(ellipse 900px 500px at 50% -10%, rgba(31,111,235,.12), transparent),
+                    radial-gradient(ellipse 700px 400px at 85% 110%, rgba(88,213,240,.06), transparent);
+}
+.hero { text-align: center; margin-bottom: 34px; }
+.hero h1 {
+  font-size: 30px; background: linear-gradient(90deg, #58d5f0, #1f6feb);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero p { color: #8b949e; margin-top: 8px; font-size: 13.5px; letter-spacing: 1px; }
+.panel {
+  width: 380px; background: #161b22; border: 1px solid #21262d; border-radius: 14px;
+  padding: 34px 32px;
+}
+.panel h2 { font-size: 19px; margin-bottom: 22px; color: #e6edf3; }
+.item { margin-bottom: 16px; }
+.item label { display: block; font-size: 13px; color: #8b949e; margin-bottom: 7px; }
+.item input {
+  width: 100%; background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+  border-radius: 8px; padding: 10px 14px; font-size: 15px; outline: none;
+}
+.item input:focus { border-color: #58d5f0; }
+.btn {
+  width: 100%; background: linear-gradient(90deg, #1f6feb, #2f81f7); color: #fff;
+  border: none; border-radius: 8px; padding: 11px; font-size: 15.5px; cursor: pointer;
+  margin-top: 6px; font-weight: 500;
+}
+.btn:hover { filter: brightness(1.12); }
+.error {
+  background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.35); color: #f85149;
+  border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px;
+}
+footer { margin-top: 30px; color: #484f58; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>Kronos 量化研究平台</h1>
+  <p>K 线预测 · 量化交易 · 实盘通道</p>
+</div>
+<div class="panel">
+  <h2>🔐 用户登录</h2>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="{{ next or '' }}">
+    <div class="item">
+      <label>用户名</label>
+      <input name="username" autofocus autocomplete="username" required>
+    </div>
+    <div class="item">
+      <label>密码</label>
+      <input name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn" type="submit">登 录</button>
+  </form>
+</div>
+<footer>Kronos v1.1 · 授权访问 · 操作均有审计记录</footer>
+</body>
+</html>

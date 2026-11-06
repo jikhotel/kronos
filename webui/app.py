@@ -5,7 +5,7 @@ import json
 import plotly.graph_objects as go
 import plotly.utils
 from plotly.subplots import make_subplots
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
 import sys
 import re
@@ -26,6 +26,120 @@ except ImportError:
 
 app = Flask(__name__)
 CORS(app)
+
+# ============================================================
+# 登录 / 用户管理 / 操作审计 (webui/auth.py)
+# ============================================================
+try:
+    import auth as kronos_auth
+
+    # 持久化 secret key(重启不丢会话)
+    _sk_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.secret_key')
+    if os.path.exists(_sk_file):
+        app.secret_key = open(_sk_file).read().strip()
+    else:
+        import secrets as _secrets
+        app.secret_key = _secrets.token_hex(32)
+        with open(_sk_file, 'w') as _f:
+            _f.write(app.secret_key)
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+
+    kronos_auth.init_db()
+    app.before_request(kronos_auth.before_request_hook)
+    app.after_request(kronos_auth.after_request_hook)
+
+    @app.context_processor
+    def _inject_user():
+        return {'u': kronos_auth.current_user()}
+
+    @app.route('/login', methods=['GET', 'POST'])
+    def login_page():
+        if request.method == 'POST':
+            user = kronos_auth.verify_login(
+                (request.form.get('username') or '').strip(),
+                request.form.get('password') or '',
+                request.remote_addr or '')
+            if user:
+                session['user'] = user
+                session.permanent = True
+                nxt = request.form.get('next') or '/'
+                if not nxt.startswith('/'):
+                    nxt = '/'
+                return redirect(nxt)
+            return render_template('login.html', error='用户名或密码错误',
+                                   next=request.form.get('next', ''))
+        return render_template('login.html', error=None, next=request.args.get('next', ''))
+
+    @app.route('/logout')
+    def logout():
+        u = kronos_auth.current_user()
+        if u:
+            kronos_auth.log_op(u['username'], '登出', '主动退出', 200)
+        session.clear()
+        return redirect('/login')
+
+    @app.route('/account')
+    def account_page():
+        return render_template('account.html')
+
+    @app.route('/api/change-password', methods=['POST'])
+    def change_password():
+        u = kronos_auth.current_user()
+        if not u:
+            return jsonify({'error': '未登录'}), 401
+        data = request.get_json() or {}
+        ok, msg = kronos_auth.change_password(
+            u['username'], data.get('old_password'), data.get('new_password'))
+        return jsonify({('message' if ok else 'error'): msg, 'success': ok}), (200 if ok else 400)
+
+    @app.route('/admin')
+    @kronos_auth.admin_required
+    def admin_page():
+        return render_template('admin.html')
+
+    @app.route('/api/admin/users')
+    @kronos_auth.admin_required
+    def admin_users():
+        return jsonify({'users': kronos_auth.list_users()})
+
+    @app.route('/api/admin/users', methods=['POST'])
+    @kronos_auth.admin_required
+    def admin_create_user():
+        data = request.get_json() or {}
+        ok, msg = kronos_auth.create_user(
+            (data.get('username') or '').strip(), data.get('password') or '',
+            role=data.get('role', 'user'), remark=data.get('remark', ''),
+            by=kronos_auth.current_user()['username'])
+        return jsonify({('message' if ok else 'error'): msg, 'success': ok}), (200 if ok else 400)
+
+    @app.route('/api/admin/users/<int:uid>', methods=['POST'])
+    @kronos_auth.admin_required
+    def admin_update_user(uid):
+        data = request.get_json() or {}
+        ok, msg = kronos_auth.update_user(uid, data, by=kronos_auth.current_user()['username'])
+        return jsonify({('message' if ok else 'error'): msg, 'success': ok}), (200 if ok else 400)
+
+    @app.route('/api/admin/users/<int:uid>', methods=['DELETE'])
+    @kronos_auth.admin_required
+    def admin_delete_user(uid):
+        ok, msg = kronos_auth.delete_user(uid, by=kronos_auth.current_user()['username'])
+        return jsonify({('message' if ok else 'error'): msg, 'success': ok}), (200 if ok else 400)
+
+    @app.route('/api/admin/logs')
+    @kronos_auth.admin_required
+    def admin_logs():
+        limit = int(request.args.get('limit', 200) or 200)
+        return jsonify({'logs': kronos_auth.list_logs(min(limit, 1000))})
+
+    @app.route('/healthz')
+    def healthz():
+        return jsonify({'ok': True})
+
+    AUTH_AVAILABLE = True
+except Exception as _auth_err:
+    AUTH_AVAILABLE = False
+    print(f"Warning: auth subsystem unavailable: {_auth_err}")
+
 
 # Global variables to store models
 tokenizer = None

@@ -98,3 +98,5 @@ webui/prediction_results/
 quant/quant.db
 quant/quant.db-wal
 quant/quant.db-shm
+webui/.secret_key
+bridge/*.zip

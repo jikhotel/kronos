@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>用户管理 · Kronos</title>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0d1117; color: #e6edf3;
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  padding: 30px 20px; min-height: 100vh;
+}
+.wrap { max-width: 1100px; margin: 0 auto; }
+h1 { font-size: 24px; margin-bottom: 6px; }
+.sub { color: #8b949e; font-size: 13px; margin-bottom: 26px; }
+.nav { margin-bottom: 22px; font-size: 13.5px; }
+.nav a { color: #58d5f0; text-decoration: none; margin-right: 16px; }
+.nav a:hover { text-decoration: underline; }
+.nav .who { color: #8b949e; margin-right: 12px; }
+.card {
+  background: #161b22; border: 1px solid #21262d; border-radius: 12px;
+  padding: 22px 24px; margin-bottom: 26px;
+}
+.card h2 { font-size: 17px; margin-bottom: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: #8b949e; font-weight: 500; padding: 8px 10px; border-bottom: 1px solid #21262d; }
+td { padding: 8px 10px; border-bottom: 1px solid #1c2129; }
+tr:hover td { background: rgba(31,111,235,.05); }
+.role-admin { color: #d29922; }
+.role-user { color: #8b949e; }
+.btn {
+  background: #21262d; border: 1px solid #30363d; color: #e6edf3;
+  border-radius: 6px; padding: 5px 12px; font-size: 12.5px; cursor: pointer; margin-right: 6px;
+}
+.btn:hover { border-color: #58d5f0; color: #58d5f0; }
+.btn.danger:hover { border-color: #f85149; color: #f85149; }
+.btn.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+.form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.form-row input, .form-row select {
+  background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+  border-radius: 6px; padding: 8px 12px; font-size: 13.5px; outline: none;
+}
+.msg { font-size: 13px; margin-top: 8px; min-height: 18px; }
+.ok { color: #3fb950; } .err { color: #f85149; }
+.log-at { color: #8b949e; white-space: nowrap; }
+.log-user { color: #58d5f0; }
+.muted { color: #8b949e; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚙️ 用户管理</h1>
+  <div class="sub">账户、角色与操作审计 · Kronos 授权访问控制</div>
+  <div class="nav">
+    <span class="who">{{ u.username }}({{ u.role }})</span>
+    <a href="/">首页</a> <a href="/predict">K线预测</a> <a href="/quant">量化交易</a>
+    <a href="/account">修改密码</a> <a href="/logout">退出登录</a>
+  </div>
+
+  <div class="card">
+    <h2>👤 用户列表</h2>
+    <table id="users-tb">
+      <thead><tr>
+        <th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>备注</th>
+        <th>创建时间</th><th>最近登录</th><th>操作</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="msg" id="users-msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>➕ 新建用户</h2>
+    <div class="form-row">
+      <input id="nu-name" placeholder="用户名(3-20位字母数字下划线)" style="width:230px">
+      <input id="nu-pw" placeholder="密码(≥6位)" type="password" style="width:170px">
+      <select id="nu-role"><option value="user">user(普通)</option><option value="admin">admin(管理员)</option></select>
+      <input id="nu-remark" placeholder="备注(可选)" style="width:180px">
+      <button class="btn primary" onclick="createUser()">创建</button>
+    </div>
+    <div class="msg" id="nu-msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>📜 操作审计日志(最近200条)</h2>
+    <table id="logs-tb">
+      <thead><tr><th>时间</th><th>用户</th><th>动作</th><th>详情</th><th>IP</th><th>请求</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const show = (id, ok, text) => {
+  const el = document.getElementById(id);
+  el.className = 'msg ' + (ok ? 'ok' : 'err'); el.textContent = text;
+};
+
+async function loadUsers() {
+  const res = await axios.get('/api/admin/users');
+  const rows = res.data.users.map(v => `
+    <tr>
+      <td>${v.id}</td><td>${v.username}</td>
+      <td class="role-${v.role}">${v.role}</td>
+      <td>${v.enabled ? '✅ 启用' : '⛔ 禁用'}</td>
+      <td class="muted">${v.remark || '-'}</td>
+      <td class="muted">${v.created_at || '-'}</td>
+      <td class="muted">${v.last_login_at || '-'}${v.last_login_ip ? ' / ' + v.last_login_ip : ''}</td>
+      <td>
+        <button class="btn" onclick="resetPw(${v.id}, '${v.username}')">重置密码</button>
+        <button class="btn" onclick="toggleUser(${v.id}, ${v.enabled ? 0 : 1})">${v.enabled ? '禁用' : '启用'}</button>
+        <button class="btn danger" onclick="delUser(${v.id}, '${v.username}')">删除</button>
+      </td>
+    </tr>`).join('');
+  document.querySelector('#users-tb tbody').innerHTML = rows;
+}
+
+async function createUser() {
+  const body = {
+    username: document.getElementById('nu-name').value.trim(),
+    password: document.getElementById('nu-pw').value,
+    role: document.getElementById('nu-role').value,
+    remark: document.getElementById('nu-remark').value.trim()
+  };
+  const res = await axios.post('/api/admin/users', body);
+  show('nu-msg', res.data.success, res.data.message || res.data.error);
+  if (res.data.success) {
+    document.getElementById('nu-name').value = '';
+    document.getElementById('nu-pw').value = '';
+    loadUsers();
+  }
+}
+
+function resetPw(id, name) {
+  const pw = prompt(`为 ${name} 设置新密码(≥6位):`);
+  if (!pw) return;
+  axios.post(`/api/admin/users/${id}`, {password: pw})
+    .then(r => { show('users-msg', r.data.success, r.data.message || r.data.error); });
+}
+
+function toggleUser(id, enabled) {
+  axios.post(`/api/admin/users/${id}`, {enabled: !!enabled})
+    .then(r => { show('users-msg', r.data.success, r.data.message || r.data.error); loadUsers(); });
+}
+
+function delUser(id, name) {
+  if (!confirm(`确认删除用户 ${name}? 此操作不可恢复`)) return;
+  axios.delete(`/api/admin/users/${id}`)
+    .then(r => { show('users-msg', r.data.success, r.data.message || r.data.error); loadUsers(); });
+}
+
+async function loadLogs() {
+  const res = await axios.get('/api/admin/logs?limit=200');
+  document.querySelector('#logs-tb tbody').innerHTML = res.data.logs.map(l => `
+    <tr>
+      <td class="log-at">${l.at}</td>
+      <td class="log-user">${l.username}</td>
+      <td>${l.action}</td>
+      <td class="muted">${(l.detail || '').slice(0, 90)}</td>
+      <td class="muted">${l.ip || '-'}</td>
+      <td class="muted">${l.method || ''} ${(l.path || '').slice(0, 30)}</td>
+    </tr>`).join('');
+}
+
+loadUsers(); loadLogs();
+</script>
+</body>
+</html>
