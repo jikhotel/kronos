@@ -80,6 +80,7 @@ tr:hover td { background: #1c2128; }
 
   <div class="tabs">
     <button class="tab-btn active" data-tab="tab-strategy">📋 策略管理</button>
+    <button class="tab-btn" data-tab="tab-chat">💬 聊天创建</button>
     <button class="tab-btn" data-tab="tab-backtest">📊 策略回测</button>
     <button class="tab-btn" data-tab="tab-live">💰 实盘交易</button>
   </div>
@@ -105,11 +106,26 @@ tr:hover td { background: #1c2128; }
       </div>
     </div>
     <div class="card">
-      <h3>我的策略</h3>
+      <h3>策略列表 <span class="muted">🤝=所有用户可见 · 🔒=仅自己可见</span></h3>
       <table>
-        <thead><tr><th>ID</th><th>名称</th><th>类型</th><th>交易逻辑</th><th>标的</th><th>参数</th><th>资金</th><th>状态</th><th>操作</th></tr></thead>
-        <tbody id="strategy-tbody"><tr><td colspan="9" class="empty">暂无策略</td></tr></tbody>
+        <thead><tr><th>ID</th><th>名称</th><th>类型</th><th>交易逻辑</th><th>标的</th><th>参数</th><th>资金</th><th>状态</th><th>归属</th><th>共享</th><th>操作</th></tr></thead>
+        <tbody id="strategy-tbody"><tr><td colspan="11" class="empty">暂无策略</td></tr></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- ============ Tab 1.5: 聊天创建 ============ -->
+  <div id="tab-chat" class="tab-pane">
+    <div class="card">
+      <h3>💬 聊天创建策略 <span class="muted">用一句话描述, 我帮你解析成策略</span></h3>
+      <div id="chat-box" style="height:380px; overflow-y:auto; background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:14px; font-size:13.5px; line-height:1.7;">
+        <div class="muted">试试：「帮我创建一个双均线策略，快线10慢线30，标的川金诺」<br>或：「用 Kronos 预测贵州茅台，预测未来60根，涨5%买入，本金20万」<br>输入「帮助」查看完整用法。</div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <input id="chat-input" placeholder="描述你想创建的策略…" style="flex:1; background:#0d1117; border:1px solid #30363d; color:#e6edf3; border-radius:6px; padding:9px 12px; font-size:14px; outline:none" onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="btn" id="chat-send-btn" onclick="sendChat()">发送</button>
+        <button class="btn success" id="chat-confirm-btn" style="display:none" onclick="sendChat('确认')">✔ 创建这个策略</button>
+      </div>
     </div>
   </div>
 
@@ -146,7 +162,7 @@ tr:hover td { background: #1c2128; }
     <div class="card">
       <h3>历史回测记录</h3>
       <table>
-        <thead><tr><th>ID</th><th>策略</th><th>类型</th><th>标的</th><th>区间</th><th>总收益</th><th>年化</th><th>最大回撤</th><th>夏普</th><th>胜率</th><th>操作</th></tr></thead>
+        <thead><tr><th>ID</th><th>策略</th><th>类型</th><th>标的</th><th>区间</th><th>总收益</th><th>年化</th><th>最大回撤</th><th>夏普</th><th>胜率</th><th>归属</th><th>共享</th><th>操作</th></tr></thead>
         <tbody id="bt-history-tbody"><tr><td colspan="11" class="empty">暂无记录</td></tr></tbody>
       </table>
     </div>
@@ -292,9 +308,17 @@ async function loadStrategies() {
 
 function renderStrategies() {
   const tbody = document.getElementById('strategy-tbody');
-  if (!strategies.length) { tbody.innerHTML = '<tr><td colspan="9" class="empty">暂无策略, 请先创建</td></tr>'; return; }
+  if (!strategies.length) { tbody.innerHTML = '<tr><td colspan="11" class="empty">暂无策略, 请先创建</td></tr>'; return; }
   tbody.innerHTML = strategies.map(s => {
     const desc = s.description || (strategyTypes[s.type] || {}).desc || '';
+    const shareBtn = s.can_manage
+      ? `<button class="btn small ${s.is_public ? 'success' : ''}" onclick="toggleShare(${s.id}, ${s.is_public ? 0 : 1})" title="共享后所有用户可见">${s.is_public ? '🤝 共享中' : '🔒 私有'}</button>`
+      : (s.is_public ? '<span class="badge on">🤝 共享</span>' : '<span class="muted">—</span>');
+    const ops = s.can_manage
+      ? `<button class="btn small" onclick="quickBacktest(${s.id})">📊 回测</button>
+         <button class="btn small ${s.status === 'active' ? 'warn' : 'success'}" onclick="toggleStrategy(${s.id})">${s.status === 'active' ? '停止' : '启动'}</button>
+         <button class="btn small danger" onclick="deleteStrategy(${s.id})">删除</button>`
+      : `<button class="btn small" onclick="quickBacktest(${s.id})">📊 回测</button>`;
     return `
     <tr>
       <td>${s.id}</td>
@@ -305,13 +329,19 @@ function renderStrategies() {
       <td class="muted">${JSON.stringify(s.params)}</td>
       <td>${fmt(s.initial_capital)}</td>
       <td><span class="badge ${s.status === 'active' ? 'on' : 'off'}">${s.status === 'active' ? '运行中' : '已停止'}</span></td>
-      <td>
-        <button class="btn small" onclick="quickBacktest(${s.id})">📊 回测</button>
-        <button class="btn small ${s.status === 'active' ? 'warn' : 'success'}" onclick="toggleStrategy(${s.id})">${s.status === 'active' ? '停止' : '启动'}</button>
-        <button class="btn small danger" onclick="deleteStrategy(${s.id})">删除</button>
-      </td>
+      <td class="muted">${s.owner || '-'}</td>
+      <td>${shareBtn}</td>
+      <td>${ops}</td>
     </tr>`;
   }).join('');
+}
+
+async function toggleShare(id, next) {
+  const res = await axios.post(`/api/quant/strategies/${id}/share`, { is_public: !!next });
+  if (res.data.success) {
+    showStatus('ok', next ? '已共享, 所有用户可见(回测记录一并共享)' : '已设为私有');
+    loadStrategies(); loadBacktestHistory();
+  } else showStatus('err', res.data.error);
 }
 
 async function createStrategy() {
@@ -353,6 +383,40 @@ function quickBacktest(id) {
   document.getElementById('bt-strategy').value = String(id);
 }
 
+// ============ 聊天创建 ============
+let chatDraft = null;
+
+function chatAppend(role, text) {
+  const box = document.getElementById('chat-box');
+  const div = document.createElement('div');
+  div.style.margin = '10px 0';
+  div.innerHTML = `<b style="color:${role === 'user' ? '#58d5f0' : '#3fb950'}">${role === 'user' ? '🧑 你' : '🤖 助手'}</b><div style="margin-top:4px; white-space:pre-wrap">${text.replace(/</g, '&lt;')}</div>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendChat(preset) {
+  const input = document.getElementById('chat-input');
+  const message = preset || input.value.trim();
+  if (!message) return;
+  if (!preset) input.value = '';
+  chatAppend('user', message);
+  const btn = document.getElementById('chat-send-btn');
+  btn.disabled = true;
+  try {
+    const res = await axios.post('/api/quant/chat', { message, draft: chatDraft }, { timeout: 30000 });
+    const d = res.data;
+    if (d.error) { chatAppend('bot', '❌ ' + d.error); return; }
+    chatAppend('bot', d.reply || '');
+    chatDraft = d.draft || null;
+    const confirmBtn = document.getElementById('chat-confirm-btn');
+    confirmBtn.style.display = chatDraft ? 'inline-block' : 'none';
+    if (d.created) { chatDraft = null; confirmBtn.style.display = 'none'; loadStrategies(); }
+  } catch (e) {
+    chatAppend('bot', '❌ ' + (e.response?.data?.error || e.message));
+  } finally { btn.disabled = false; }
+}
+
 // ============ 回测 ============
 async function loadFiles() {
   const res = await axios.get('/api/quant/data-files');
@@ -378,7 +442,7 @@ async function runBacktest() {
       file_path: document.getElementById('bt-file').value || null,
       start_date: document.getElementById('bt-start').value || null,
       end_date: document.getElementById('bt-end').value || null
-    });
+    }, { timeout: 600000 });
     if (res.data.success) {
       renderBacktestResult(res.data);
       showStatus('ok', `回测完成: ${res.data.n_bars} 根 K 线, ${res.data.metrics.n_trades} 笔平仓交易`);
@@ -428,15 +492,24 @@ async function loadBacktestHistory() {
   const tb = document.getElementById('bt-history-tbody');
   tb.innerHTML = res.data.backtests.length ? res.data.backtests.map(b => {
     const m = b.metrics || {};
+    const shareBtn = b.can_manage
+      ? `<button class="btn small ${b.is_public ? 'success' : ''}" onclick="toggleBtShare(${b.id}, ${b.is_public ? 0 : 1})">${b.is_public ? '🤝' : '🔒'}</button>`
+      : (b.is_public ? '<span class="badge on">🤝</span>' : '<span class="muted">—</span>');
     return `<tr><td>${b.id}</td><td>${b.strategy_name}</td>
       <td>${(strategyTypes[b.type] || {}).label || b.type}</td><td>${b.symbol}</td>
       <td>${b.start_date} ~ ${b.end_date}</td>
       <td class="${pnlCls(m.total_return_pct)}">${m.total_return_pct}%</td>
       <td class="${pnlCls(m.annual_return_pct)}">${m.annual_return_pct}%</td>
       <td class="neg">${m.max_drawdown_pct}%</td><td>${m.sharpe}</td>
-      <td>${m.win_rate_pct}%</td>
+      <td>${m.win_rate_pct}%</td><td class="muted">${b.owner || '-'}</td><td>${shareBtn}</td>
       <td><button class="btn small" onclick="viewBacktest(${b.id})">查看</button></td></tr>`;
-  }).join('') : '<tr><td colspan="11" class="empty">暂无记录</td></tr>';
+  }).join('') : '<tr><td colspan="13" class="empty">暂无记录</td></tr>';
+}
+
+async function toggleBtShare(id, next) {
+  const res = await axios.post(`/api/quant/backtests/${id}/share`, { is_public: !!next });
+  if (res.data.success) { showStatus('ok', res.data.message); loadBacktestHistory(); }
+  else showStatus('err', res.data.error);
 }
 
 async function viewBacktest(id) {

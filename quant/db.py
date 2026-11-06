@@ -6,7 +6,8 @@ import sqlite3
 import threading
 import time
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'quant.db')
+DB_PATH = os.environ.get('KRONOS_QUANT_DB') or os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'quant.db')
 _lock = threading.RLock()
 
 
@@ -36,6 +37,15 @@ def _migrate(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(strategies)").fetchall()}
     if 'description' not in cols:
         conn.execute("ALTER TABLE strategies ADD COLUMN description TEXT DEFAULT ''")
+    if 'owner' not in cols:
+        conn.execute("ALTER TABLE strategies ADD COLUMN owner TEXT DEFAULT ''")
+    if 'is_public' not in cols:
+        conn.execute("ALTER TABLE strategies ADD COLUMN is_public INTEGER DEFAULT 0")
+    bcols = {r[1] for r in conn.execute("PRAGMA table_info(backtest_results)").fetchall()}
+    if 'owner' not in bcols:
+        conn.execute("ALTER TABLE backtest_results ADD COLUMN owner TEXT DEFAULT ''")
+    if 'is_public' not in bcols:
+        conn.execute("ALTER TABLE backtest_results ADD COLUMN is_public INTEGER DEFAULT 0")
 
 
 _SCHEMA = """
@@ -52,6 +62,8 @@ CREATE TABLE IF NOT EXISTS strategies (
     slippage REAL DEFAULT 0.001,
     position_ratio REAL DEFAULT 0.95,
     status TEXT DEFAULT 'stopped',
+    owner TEXT DEFAULT '',
+    is_public INTEGER DEFAULT 0,
     created_at TEXT,
     updated_at TEXT
 );
@@ -69,6 +81,8 @@ CREATE TABLE IF NOT EXISTS backtest_results (
     metrics TEXT,
     trades TEXT,
     chart TEXT,
+    owner TEXT DEFAULT '',
+    is_public INTEGER DEFAULT 0,
     created_at TEXT
 );
 
@@ -132,10 +146,16 @@ def init_db():
 
 # ---------------- 策略 CRUD ----------------
 
-def list_strategies():
+def list_strategies(user=None, admin=False):
+    """admin 或 user=None 返回全部; 普通用户返回 自己的 + 已共享的。"""
     with _lock:
         conn = get_conn()
-        rows = conn.execute("SELECT * FROM strategies ORDER BY id DESC").fetchall()
+        if not user or admin:
+            rows = conn.execute("SELECT * FROM strategies ORDER BY id DESC").fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM strategies WHERE is_public=1 OR owner=? ORDER BY id DESC",
+                (user,)).fetchall()
         conn.close()
     out = []
     for r in rows:
@@ -163,8 +183,9 @@ def create_strategy(data):
         cur = conn.execute(
             """INSERT INTO strategies
                (name, type, description, params, symbol, freq, initial_capital,
-                commission_rate, slippage, position_ratio, status, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                commission_rate, slippage, position_ratio, status, owner, is_public,
+                created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (data['name'], data['type'], data.get('description', ''),
              json.dumps(data.get('params', {}), ensure_ascii=False),
              data['symbol'], data.get('freq', 'day'),
@@ -172,7 +193,9 @@ def create_strategy(data):
              float(data.get('commission_rate', 0.0003)),
              float(data.get('slippage', 0.001)),
              float(data.get('position_ratio', 0.95)),
-             data.get('status', 'stopped'), _now(), _now()))
+             data.get('status', 'stopped'),
+             data.get('owner', '') or '', int(bool(data.get('is_public', 0))),
+             _now(), _now()))
         sid = cur.lastrowid
         conn.commit()
         conn.close()
@@ -181,10 +204,13 @@ def create_strategy(data):
 
 def update_strategy(sid, data):
     fields, vals = [], []
-    for col in ('name', 'type', 'symbol', 'freq', 'status', 'description'):
+    for col in ('name', 'type', 'symbol', 'freq', 'status', 'description', 'owner'):
         if col in data and data[col] is not None:
             fields.append(f"{col}=?")
             vals.append(data[col])
+    if 'is_public' in data and data['is_public'] is not None:
+        fields.append("is_public=?")
+        vals.append(int(bool(data['is_public'])))
     if 'params' in data and data['params'] is not None:
         fields.append("params=?")
         vals.append(json.dumps(data['params'], ensure_ascii=False))
@@ -215,6 +241,16 @@ def delete_strategy(sid):
         conn.close()
 
 
+def set_backtests_public(strategy_id, is_public):
+    """策略共享开关级联到该策略的全部回测记录。"""
+    with _lock:
+        conn = get_conn()
+        conn.execute("UPDATE backtest_results SET is_public=? WHERE strategy_id=?",
+                     (int(bool(is_public)), strategy_id))
+        conn.commit()
+        conn.close()
+
+
 # ---------------- 回测结果 ----------------
 
 def save_backtest(row):
@@ -223,27 +259,36 @@ def save_backtest(row):
         cur = conn.execute(
             """INSERT INTO backtest_results
                (strategy_id, strategy_name, type, params, symbol, file_path,
-                start_date, end_date, metrics, trades, chart, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                start_date, end_date, metrics, trades, chart, owner, is_public, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (row.get('strategy_id'), row.get('strategy_name'), row.get('type'),
              json.dumps(row.get('params', {}), ensure_ascii=False), row.get('symbol'),
              row.get('file_path'), row.get('start_date'), row.get('end_date'),
              json.dumps(row.get('metrics', {}), ensure_ascii=False),
              json.dumps(row.get('trades', []), ensure_ascii=False),
-             row.get('chart') or '', _now()))
+             row.get('chart') or '',
+             row.get('owner', '') or '', int(bool(row.get('is_public', 0))), _now()))
         rid = cur.lastrowid
         conn.commit()
         conn.close()
     return rid
 
 
-def list_backtests(limit=30):
+def list_backtests(limit=30, user=None, admin=False):
+    """admin/user=None 返回全部; 普通用户返回 自己的 + 已共享的。"""
     with _lock:
         conn = get_conn()
-        rows = conn.execute(
-            """SELECT id, strategy_id, strategy_name, type, symbol, file_path,
-                      start_date, end_date, metrics, created_at
-               FROM backtest_results ORDER BY id DESC LIMIT ?""", (limit,)).fetchall()
+        if not user or admin:
+            rows = conn.execute(
+                """SELECT id, strategy_id, strategy_name, type, symbol, file_path,
+                          start_date, end_date, metrics, owner, is_public, created_at
+                   FROM backtest_results ORDER BY id DESC LIMIT ?""", (limit,)).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT id, strategy_id, strategy_name, type, symbol, file_path,
+                          start_date, end_date, metrics, owner, is_public, created_at
+                   FROM backtest_results WHERE is_public=1 OR owner=?
+                   ORDER BY id DESC LIMIT ?""", (user, limit)).fetchall()
         conn.close()
     out = []
     for r in rows:
@@ -264,6 +309,17 @@ def get_backtest(rid):
     d['metrics'] = json.loads(d.get('metrics') or '{}')
     d['trades'] = json.loads(d.get('trades') or '[]')
     return d
+
+
+def update_backtest_public(rid, is_public):
+    with _lock:
+        conn = get_conn()
+        cur = conn.execute("UPDATE backtest_results SET is_public=? WHERE id=?",
+                           (int(bool(is_public)), rid))
+        conn.commit()
+        n = cur.rowcount
+        conn.close()
+    return n > 0
 
 
 # ---------------- 账户 / 持仓 / 订单 ----------------

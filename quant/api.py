@@ -11,6 +11,7 @@ if _PROJECT_ROOT not in sys.path:
 
 from quant import db, engine, live
 from quant import strategies as st
+from quant import chat as chat_mod
 
 quant_bp = Blueprint('quant', __name__, url_prefix='/api/quant')
 
@@ -28,6 +29,27 @@ def _get_predict_fn():
         return _PREDICT_PROVIDER() if _PREDICT_PROVIDER else None
     except Exception:
         return None
+
+
+def _current_user():
+    """当前登录用户(webui auth 注入的 session); 无认证环境返回 None。"""
+    try:
+        from auth import current_user  # noqa: webui 目录
+        return current_user()
+    except Exception:
+        return None
+
+
+def _viewer():
+    """返回 (username, is_admin)。"""
+    u = _current_user() or {}
+    return u.get('username', '') or '', bool(u.get('role') == 'admin')
+
+
+def _can_manage(row):
+    """owner 或 admin 可管理。"""
+    user, admin = _viewer()
+    return admin or (row.get('owner', '') == user and user)
 
 
 def _load_csv(path):
@@ -68,7 +90,11 @@ def _validate_symbol(symbol):
 
 @quant_bp.route('/strategies', methods=['GET'])
 def get_strategies():
-    return jsonify({'strategies': db.list_strategies()})
+    user, admin = _viewer()
+    rows = db.list_strategies(user=user, admin=admin)
+    for r in rows:
+        r['can_manage'] = bool(admin or (user and r.get('owner') == user))
+    return jsonify({'strategies': rows})
 
 
 @quant_bp.route('/strategies', methods=['POST'])
@@ -92,6 +118,9 @@ def create_strategy():
     except Exception:
         return jsonify({'error': '参数 params 必须是合法 JSON 对象'}), 400
 
+    user, admin = _viewer()
+    # 共享开关: admin 可直接指定; 普通用户默认私有(可后续自己打开)
+    is_public = bool(data.get('is_public', False)) if admin else False
     row = db.create_strategy({
         'name': name, 'type': stype, 'params': params, 'symbol': resolved,
         'description': (data.get('description') or '').strip() or st.STRATEGY_TYPES.get(stype, {}).get('desc', ''),
@@ -100,7 +129,8 @@ def create_strategy():
         'commission_rate': data.get('commission_rate', 0.0003),
         'slippage': data.get('slippage', 0.001),
         'position_ratio': data.get('position_ratio', 0.95),
-        'status': data.get('status') or 'stopped'
+        'status': data.get('status') or 'stopped',
+        'owner': user, 'is_public': is_public
     })
     return jsonify({'success': True, 'strategy': row})
 
@@ -110,7 +140,10 @@ def update_strategy(sid):
     existing = db.get_strategy(sid)
     if not existing:
         return jsonify({'error': '策略不存在'}), 404
+    if not _can_manage(existing):
+        return jsonify({'error': '只有策略所有者或管理员可以修改'}), 403
     data = request.get_json() or {}
+    data.pop('owner', None)  # owner 不可经此接口变更
     if 'params' in data and isinstance(data['params'], str):
         try:
             data['params'] = __import__('json').loads(data['params'])
@@ -121,14 +154,35 @@ def update_strategy(sid):
         if not resolved:
             return jsonify({'error': f"无效的股票代码: {data['symbol']}"}), 400
         data['symbol'] = resolved
+    if 'is_public' in data:
+        db.set_backtests_public(sid, bool(data['is_public']))  # 级联到回测记录
     row = db.update_strategy(sid, data)
     return jsonify({'success': True, 'strategy': row})
 
 
+@quant_bp.route('/strategies/<int:sid>/share', methods=['POST'])
+def share_strategy(sid):
+    """共享开关: owner/admin 切换 is_public, 并级联该策略的回测记录。"""
+    existing = db.get_strategy(sid)
+    if not existing:
+        return jsonify({'error': '策略不存在'}), 404
+    if not _can_manage(existing):
+        return jsonify({'error': '只有策略所有者或管理员可以设置共享'}), 403
+    data = request.get_json(silent=True) or {}
+    is_public = bool(data.get('is_public', not existing.get('is_public')))
+    row = db.update_strategy(sid, {'is_public': is_public})
+    db.set_backtests_public(sid, is_public)
+    return jsonify({'success': True, 'strategy': row,
+                    'message': '已共享, 所有用户可见' if is_public else '已设为私有'})
+
+
 @quant_bp.route('/strategies/<int:sid>', methods=['DELETE'])
 def delete_strategy(sid):
-    if not db.get_strategy(sid):
+    existing = db.get_strategy(sid)
+    if not existing:
         return jsonify({'error': '策略不存在'}), 404
+    if not _can_manage(existing):
+        return jsonify({'error': '只有策略所有者或管理员可以删除'}), 403
     db.delete_strategy(sid)
     return jsonify({'success': True})
 
@@ -200,13 +254,16 @@ def run_backtest():
         return jsonify({'error': f'回测失败: {e}'}), 500
 
     chart = engine.plot_backtest(df, result['equity'], result['trades'])
+    user, _admin = _viewer()
     rid = db.save_backtest({
         'strategy_id': strat['id'], 'strategy_name': strat['name'],
         'type': strat['type'], 'params': strat['params'], 'symbol': strat['symbol'],
         'file_path': file_path,
         'start_date': str(df['timestamps'].iloc[0])[:10],
         'end_date': str(df['timestamps'].iloc[-1])[:10],
-        'metrics': result['metrics'], 'trades': result['trades'], 'chart': chart
+        'metrics': result['metrics'], 'trades': result['trades'], 'chart': chart,
+        'owner': strat.get('owner') or user,
+        'is_public': bool(strat.get('is_public'))  # 继承策略的共享开关
     })
     return jsonify({
         'success': True, 'backtest_id': rid,
@@ -218,7 +275,11 @@ def run_backtest():
 
 @quant_bp.route('/backtests')
 def backtest_history():
-    return jsonify({'backtests': db.list_backtests()})
+    user, admin = _viewer()
+    rows = db.list_backtests(user=user, admin=admin)
+    for r in rows:
+        r['can_manage'] = bool(admin or (user and r.get('owner') == user))
+    return jsonify({'backtests': rows})
 
 
 @quant_bp.route('/backtests/<int:rid>')
@@ -226,7 +287,88 @@ def backtest_detail(rid):
     row = db.get_backtest(rid)
     if not row:
         return jsonify({'error': '回测记录不存在'}), 404
+    user, admin = _viewer()
+    if not (row.get('is_public') or admin or (user and row.get('owner') == user)):
+        return jsonify({'error': '该回测记录为私有'}), 403
     return jsonify(row)
+
+
+@quant_bp.route('/backtests/<int:rid>/share', methods=['POST'])
+def share_backtest(rid):
+    """单条回测记录的共享开关(owner/admin)。"""
+    row = db.get_backtest(rid)
+    if not row:
+        return jsonify({'error': '回测记录不存在'}), 404
+    if not _can_manage(row):
+        return jsonify({'error': '只有所有者或管理员可以设置共享'}), 403
+    data = request.get_json(silent=True) or {}
+    is_public = bool(data.get('is_public', not row.get('is_public')))
+    db.update_backtest_public(rid, is_public)
+    return jsonify({'success': True,
+                    'message': '已共享, 所有用户可见' if is_public else '已设为私有'})
+
+
+# ---------------- 聊天式策略创建 ----------------
+
+@quant_bp.route('/chat', methods=['POST'])
+def chat_create():
+    """对话式创建策略: message + (可选)上轮 draft。draft + 确认词 -> 落库创建。"""
+    data = request.get_json() or {}
+    message = (data.get('message') or '').strip()
+    draft = data.get('draft') or None
+    if not message:
+        return jsonify({'error': '消息不能为空'}), 400
+
+    # 确认创建分支
+    if draft and chat_mod.is_confirm(message):
+        payload = dict(draft)
+        payload['name'] = (payload.get('name') or '').strip()
+        payload['symbol'] = (payload.get('symbol') or '').strip()
+        payload['type'] = payload.get('type') or st.DEFAULT_TYPE
+        if not payload['name']:
+            return jsonify({'error': '草稿缺少策略名称, 请重新描述'}), 400
+        if payload['type'] not in st.STRATEGY_TYPES:
+            return jsonify({'error': f"草稿策略类型无效: {payload['type']}"}), 400
+        resolved = _validate_symbol(payload['symbol'])
+        if not resolved:
+            return jsonify({'reply': '草稿里的标的无效, 请重新告诉我股票名或代码', 'draft': None}), 200
+        payload['symbol'] = resolved
+        params = payload.get('params') or {}
+        if isinstance(params, str):
+            params = __import__('json').loads(params)
+        # 参数类型规范化
+        meta = st.STRATEGY_TYPES[payload['type']]
+        clean_params = dict(meta['params'])
+        for k, v in (params or {}).items():
+            if k in clean_params:
+                clean_params[k] = type(meta['params'][k])(v) if v is not None else meta['params'][k]
+        user, admin = _viewer()
+        row = db.create_strategy({
+            'name': payload['name'], 'type': payload['type'], 'params': clean_params,
+            'symbol': resolved,
+            'description': payload.get('description') or meta['desc'],
+            'freq': payload.get('freq') or 'day',
+            'initial_capital': float(payload.get('initial_capital') or 100000),
+            'owner': user, 'is_public': False
+        })
+        return jsonify({'reply': f"✅ 策略「{row['name']}」已创建(ID {row['id']})，"
+                                 f"可在下方策略列表查看并回测。需要共享给所有用户的话，"
+                                 f"在策略列表点共享开关即可。",
+                        'draft': None, 'created': row})
+
+    parsed = chat_mod.parse_message(message)
+    if parsed['intent'] == 'list':
+        user, admin = _viewer()
+        rows = db.list_strategies(user=user, admin=admin)
+        if not rows:
+            return jsonify({'reply': '目前还没有策略。试试:「帮我创建一个双均线策略，标的川金诺」',
+                            'draft': None})
+        lines = [f"共 {len(rows)} 个策略："]
+        for r in rows[:20]:
+            tag = '🤝共享' if r.get('is_public') else '🔒私有'
+            lines.append(f"• [{r['id']}] {r['name']} — {r['symbol']} ({tag})")
+        return jsonify({'reply': '\n'.join(lines), 'draft': None})
+    return jsonify(parsed)
 
 
 # ---------------- 实盘(模拟盘/券商实盘) ----------------
