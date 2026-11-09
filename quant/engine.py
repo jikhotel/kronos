@@ -179,6 +179,31 @@ BUY_MARK = 'triangle-up'
 SELL_MARK = 'triangle-down'
 
 
+def chart_json(fig):
+    """fig -> 纯数组 JSON。PlotlyJSONEncoder 会把 numpy/pandas 数组编码为
+    {dtype, bdata} 二进制格式, 前端 plotly-2.27 不解码导致图表空白;
+    深度转普通列表后再序列化, 保证任何浏览器可渲染。"""
+    import numpy as np
+    obj = fig.to_plotly_json()
+
+    def conv(v):
+        if isinstance(v, dict):
+            return {k: conv(x) for k, x in v.items()}
+        if isinstance(v, (list, tuple)):
+            return [conv(x) for x in v]
+        if isinstance(v, np.ndarray) or (hasattr(v, 'tolist') and not isinstance(v, str)):
+            return v.tolist()
+        if isinstance(v, (np.floating, np.integer, np.bool_)):
+            return v.item()
+        if isinstance(v, float) and v != v:  # NaN -> null(合法 JSON)
+            return None
+        if hasattr(v, 'isoformat'):
+            return str(v)
+        return v
+
+    return json.dumps(conv(obj), ensure_ascii=False)
+
+
 def plot_backtest(df, equity, trades):
     """回测结果图: 上图 K线+买卖点, 下图策略净值 vs 买入持有基准。数值索引轴(缩放顺滑)。"""
     from plotly.subplots import make_subplots
@@ -245,4 +270,4 @@ def plot_backtest(df, equity, trades):
         tickvals=tick_vals, ticktext=tick_text, tickangle=-45, title_text='交易日'
     )
     fig.update_yaxes(side='right')
-    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+    return chart_json(fig)

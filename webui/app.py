@@ -5,13 +5,15 @@ import json
 import plotly.graph_objects as go
 import plotly.utils
 from plotly.subplots import make_subplots
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 from flask_cors import CORS
 import sys
 import re
 import warnings
 import datetime
 import requests
+import subprocess
+import time
 warnings.filterwarnings('ignore')
 
 # Add project root directory to path
@@ -458,6 +460,31 @@ def _to_labels(seq):
     return [_fmt_label(t) if not isinstance(t, (int, np.integer)) else t for t in seq]
 
 
+def _chart_json(fig):
+    """fig -> 纯数组 JSON。PlotlyJSONEncoder 的 {dtype, bdata} 二进制编码
+    浏览器端 plotly-2.27 不解码导致 Prediction Results Chart 空白;
+    深度转普通列表后序列化, 保证任何浏览器可渲染。"""
+    import numpy as np
+    obj = fig.to_plotly_json()
+
+    def conv(v):
+        if isinstance(v, dict):
+            return {k: conv(x) for k, x in v.items()}
+        if isinstance(v, (list, tuple)):
+            return [conv(x) for x in v]
+        if isinstance(v, np.ndarray) or (hasattr(v, 'tolist') and not isinstance(v, str)):
+            return v.tolist()
+        if isinstance(v, (np.floating, np.integer, np.bool_)):
+            return v.item()
+        if isinstance(v, float) and v != v:  # NaN -> null(合法 JSON)
+            return None
+        if hasattr(v, 'isoformat'):
+            return str(v)
+        return v
+
+    return json.dumps(conv(obj), ensure_ascii=False)
+
+
 def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
                             historical_start_idx=0, pred_timestamps=None, mode='forecast',
                             lower_indicator='volume'):
@@ -641,7 +668,7 @@ def create_prediction_chart(df, pred_df, lookback, pred_len, actual_df=None,
         tickangle=-45
     )
 
-    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+    return _chart_json(fig)
 
 @app.route('/')
 def index():
@@ -1167,6 +1194,57 @@ def _auto_load_model():
 
 if os.environ.get('KRONOS_AUTOLOAD', '1') != '0':
     threading.Thread(target=_auto_load_model, daemon=True).start()
+
+
+# ============================================================
+# 智能选股模块 (Screener) —— 涨停概率排行
+# ============================================================
+_SCREENER_REFRESH = {"running": False, "ok": None, "msg": "", "ts": None}
+
+
+def _run_screener_gen():
+    _SCREENER_REFRESH["running"] = True
+    try:
+        _SCREENER_REFRESH["msg"] = "抓取全A行情中…"
+        subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "screener_gen.py")],
+            check=True, timeout=420, capture_output=True,
+        )
+        _SCREENER_REFRESH["ok"] = True
+        _SCREENER_REFRESH["msg"] = "刷新成功"
+    except Exception as _e:
+        _SCREENER_REFRESH["ok"] = False
+        _SCREENER_REFRESH["msg"] = str(_e)[:200]
+    finally:
+        _SCREENER_REFRESH["running"] = False
+        _SCREENER_REFRESH["ts"] = time.time()
+
+
+@app.route("/screener")
+def screener_page():
+    """智能选股(涨停潜力排行)模块页面"""
+    return render_template("screener.html")
+
+
+@app.route("/api/screener/data")
+def screener_data():
+    p = os.path.join(os.path.dirname(__file__), "screener_data.json")
+    if not os.path.exists(p):
+        return jsonify({"stocks": [], "meta": {}})
+    return send_file(p, mimetype="application/json")
+
+
+@app.route("/api/screener/refresh", methods=["POST"])
+def screener_refresh():
+    if _SCREENER_REFRESH["running"]:
+        return jsonify({"success": False, "msg": "刷新进行中，请稍候"})
+    threading.Thread(target=_run_screener_gen, daemon=True).start()
+    return jsonify({"success": True, "msg": "已启动刷新"})
+
+
+@app.route("/api/screener/status")
+def screener_status():
+    return jsonify(_SCREENER_REFRESH)
 
 
 if __name__ == '__main__':

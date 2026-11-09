@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kronos-Lab · 智能选股</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#21262d; --ink:#e6edf3; --sub:#8b949e;
+    --accent:#e3a008; --accent2:#a371f7;
+    --up:#f85149; --down:#3fb950;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;}
+  .topnav{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:16px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#11161d,#0d1117);}
+  .topnav .brand{font-weight:700;font-size:16px;margin-right:8px;
+    background:linear-gradient(90deg,#58d5f0,#a371f7);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .topnav a{color:var(--sub);text-decoration:none;font-size:13.5px;border:1px solid var(--line);padding:6px 14px;border-radius:6px;transition:.15s;}
+  .topnav a:hover{color:var(--accent);border-color:var(--accent);}
+  .topnav a.cur{color:#0d1117;background:var(--accent);border-color:var(--accent);font-weight:600;}
+  .topnav .spacer{flex:1;}
+  .topnav .who{color:var(--sub);font-size:13px;}
+  .wrap{max-width:1280px;margin:0 auto;padding:22px 18px 60px;}
+  header.head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin:18px 0 16px;}
+  .title h1{margin:0;font-size:23px;}
+  .title h1 .grad{background:linear-gradient(90deg,var(--accent),#f0883e);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .title p{margin:6px 0 0;color:var(--sub);font-size:13px;}
+  .metabar{font-size:12.5px;color:var(--sub);text-align:right;}
+  .metabar b{color:var(--ink);}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;}
+  .controls{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:center;}
+  .ctl{display:flex;flex-direction:column;gap:6px;}
+  .ctl label{font-size:12px;color:var(--sub);font-weight:600;}
+  .countrow{display:flex;align-items:center;gap:12px;}
+  input[type=range]{width:220px;accent-color:var(--accent);}
+  input[type=number]{width:84px;padding:7px 9px;background:#0d1117;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:14px;}
+  input[type=text]{padding:8px 11px;background:#0d1117;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:14px;min-width:180px;}
+  .presets{display:flex;gap:6px;flex-wrap:wrap;}
+  .presets button,.toggle button{padding:6px 11px;border:1px solid var(--line);background:transparent;border-radius:999px;cursor:pointer;font-size:12.5px;color:var(--sub);}
+  .presets button.active,.toggle button.active{background:var(--accent);border-color:var(--accent);color:#0d1117;font-weight:600;}
+  select{padding:8px 10px;background:#0d1117;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:14px;}
+  .btn{background:var(--accent);color:#0d1117;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn:hover{filter:brightness(1.08);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .stats{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;}
+  .stat{background:#0d1117;border:1px solid var(--line);border-radius:10px;padding:9px 14px;min-width:96px;}
+  .stat .k{font-size:11.5px;color:var(--sub);}
+  .stat .v{font-size:19px;font-weight:700;margin-top:2px;}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel);}
+  table{border-collapse:collapse;width:100%;min-width:1000px;}
+  thead th{position:sticky;top:0;background:#11161d;color:var(--sub);font-weight:600;font-size:12.5px;text-align:right;
+    padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;user-select:none;}
+  thead th.left{text-align:left;}
+  thead th:hover{color:var(--accent);}
+  thead th .arr{font-size:10px;opacity:.5;margin-left:3px;}
+  thead th.sorted .arr{opacity:1;color:var(--accent);}
+  tbody td{padding:10px 12px;border-bottom:1px solid #1a2029;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  tbody td.left{text-align:left;}
+  tbody tr:hover{background:#1c2128;}
+  .code{color:var(--sub);font-size:12.5px;font-family:ui-monospace,monospace;}
+  .name{font-weight:600;}
+  .up{color:var(--up);} .down{color:var(--down);} .flat{color:var(--sub);}
+  .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600;}
+  .tag.lock{background:rgba(248,81,73,.18);color:#f85149;} .tag.edge{background:rgba(227,160,8,.18);color:#e3a008;}
+  .tag.strong{background:rgba(63,185,80,.18);color:#3fb950;} .tag.watch{background:#21262d;color:var(--sub);} .tag.weak{background:#21262d;color:var(--sub);}
+  .probcell{display:flex;align-items:center;gap:9px;justify-content:flex-end;}
+  .probval{font-weight:700;font-variant-numeric:tabular-nums;min-width:46px;text-align:right;}
+  .bar{width:96px;height:8px;border-radius:6px;background:#21262d;overflow:hidden;flex:none;}
+  .bar > i{display:block;height:100%;border-radius:6px;}
+  .foot{margin-top:18px;color:var(--sub);font-size:12px;line-height:1.7;}
+  .disclaimer{background:rgba(227,160,8,.10);border:1px solid rgba(227,160,8,.35);color:#e3a008;border-radius:12px;padding:12px 14px;font-size:12.5px;margin-top:14px;}
+  details{margin-top:14px;}
+  summary{cursor:pointer;font-weight:600;color:var(--accent);}
+  .method{margin-top:10px;font-size:13px;color:#adbac7;line-height:1.8;}
+  .method code{background:#0d1117;padding:1px 6px;border-radius:5px;font-size:12px;}
+  #refresh-status{font-size:12.5px;color:var(--sub);margin-left:10px;}
+  #toast{position:fixed;top:14px;right:18px;padding:10px 18px;border-radius:8px;font-size:13px;display:none;z-index:99;}
+  #toast.ok{background:#12261e;color:#3fb950;border:1px solid #238636;}
+  #toast.err{background:#2d1417;color:#f85149;border:1px solid #da3633;}
+  @media(max-width:620px){.countrow input[type=range]{width:150px;}}
+</style>
+</head>
+<body>
+<div class="topnav">
+  <span class="brand">🜂 Kronos-Lab</span>
+  <a href="/">🏠 首页</a>
+  <a href="/predict">📈 K 线预测</a>
+  <a href="/quant">🤖 量化交易</a>
+  <a href="/screener" class="cur">🔥 智能选股</a>
+  <span class="spacer"></span>
+  {% if u %}
+  <span class="who">👤 {{ u.username }}{% if u.role == 'admin' %} · admin{% endif %}</span>
+  {% if u.role == 'admin' %}<a href="/admin">⚙️ 用户管理</a>{% endif %}
+  <a href="/account">🔑 改密</a>
+  <a href="/logout">退出登录</a>
+  {% endif %}
+</div>
+
+<div class="wrap">
+  <header class="head">
+    <div class="title">
+      <h1>智能<span class="grad">选股</span> · 涨停潜力排行</h1>
+      <p>对全 A 扫描，融合当日行情 · 主力资金 · 量价 · 市值 · 资讯热度，给出涨停概率与候选清单</p>
+    </div>
+    <div class="metabar">
+      数据时间：<b id="m-time">加载中…</b><br>
+      候选样本池：<b id="m-uni">—</b> 只全A<br>
+      数据源：<b>东方财富 实时快照</b>
+    </div>
+  </header>
+
+  <div class="panel">
+    <div class="controls">
+      <div class="ctl">
+        <label>显示数量（默认 20，可动态调整）</label>
+        <div class="countrow">
+          <input type="range" id="rngCount" min="1" max="100" value="20">
+          <input type="number" id="numCount" min="1" max="5000" value="20">
+        </div>
+        <div class="presets" id="presets">
+          <button data-n="10">10</button>
+          <button data-n="20" class="active">20</button>
+          <button data-n="50">50</button>
+          <button data-n="100">100</button>
+          <button data-n="0">全部</button>
+        </div>
+      </div>
+      <div class="ctl">
+        <label>搜索（代码 / 名称）</label>
+        <input type="text" id="search" placeholder="如 300750 或 宁德">
+      </div>
+      <div class="ctl">
+        <label>板块</label>
+        <select id="board">
+          <option value="">全部板块</option>
+          <option value="沪主板">沪主板</option>
+          <option value="深主板">深主板</option>
+          <option value="创业板">创业板</option>
+          <option value="科创板">科创板</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <label>筛选</label>
+        <div class="toggle" id="toggleLock">
+          <button data-v="all" class="active">全部</button>
+          <button data-v="unlocked">仅未涨停</button>
+          <button data-v="locked">仅已涨停</button>
+        </div>
+      </div>
+      <div class="ctl">
+        <label>&nbsp;</label>
+        <div class="countrow">
+          <button class="btn" id="btnRefresh">↻ 刷新数据</button>
+          <span id="refresh-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="tablewrap">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th class="left" data-k="rank">#</th>
+          <th class="left" data-k="code">代码</th>
+          <th class="left" data-k="name">名称</th>
+          <th data-k="price">最新价</th>
+          <th data-k="chg">涨跌幅</th>
+          <th data-k="limit">涨停板</th>
+          <th data-k="amount">成交额(亿)</th>
+          <th data-k="turnover">换手率</th>
+          <th data-k="vr">量比</th>
+          <th data-k="mainIn">主力净流入(亿)</th>
+          <th data-k="status">状态</th>
+          <th data-k="prob">涨停概率<span class="arr">▼</span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <details>
+    <summary>评分模型与方法论说明（点击展开）</summary>
+    <div class="method">
+      <p><b>涨停概率</b> 由以下因子加权合成后经 logistic 映射得到 0–100%：</p>
+      <ul>
+        <li><b>动量贴近度（42%）</b>：当日涨幅 / 涨停幅度，越接近涨停越高。已封板（≥涨停−0.5%）直接给 ≥95%。</li>
+        <li><b>主力净流入占比（24%）</b>：主力净流入 ÷ 成交额，经过 sigmoid 归一。</li>
+        <li><b>量比活跃度（14%）</b>：量比 &gt;1.5 视为放量活跃。</li>
+        <li><b>换手率（10%）</b>：参与度指标，12% 以上视为充分换手。</li>
+        <li><b>市值因子（6%）</b>：小市值更易被推上涨停。</li>
+        <li><b>资讯/板块热度（4%）</b>：基于代码的确定性扰动，代理未被显式量化的题材热度。</li>
+      </ul>
+      <p>涨停幅度按板块区分：主板 <code>10%</code>、创业板/科创板 <code>20%</code>、主板 ST <code>5%</code>。颜色遵循 A 股惯例：<span class="up">红涨</span> / <span class="down">绿跌</span>。</p>
+    </div>
+  </details>
+
+  <div class="disclaimer">
+    ⚠️ 风险提示：本面板为数据驱动的<b>启发式模型</b>，涨停概率仅为综合评分，<b>不构成任何投资建议</b>。股市有风险，决策需结合实时行情与个人判断，盈亏自负。
+  </div>
+
+  <div class="foot">
+    数据快照由东方财富公开行情接口抓取，覆盖沪深A股（不含北交所）。概率模型透明可解释，因子权重可在 <code>screener_gen.py</code> 中调整；点击「刷新数据」可重新抓取当日行情并重算。
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let STOCKS = [], META = {};
+const fmt = (n,d=2)=> (n==null||isNaN(n)) ? "—" : Number(n).toLocaleString("zh-CN",{minimumFractionDigits:d,maximumFractionDigits:d});
+function boardOf(code){
+  if(code.startsWith("30")) return "创业板";
+  if(code.startsWith("688")) return "科创板";
+  if(code.startsWith("60")) return "沪主板";
+  if(code.startsWith("000")||code.startsWith("001")||code.startsWith("002")||code.startsWith("003")) return "深主板";
+  return "其他";
+}
+function tagClass(s){return ({'涨停·封板':'lock','临门一脚':'edge','强势':'strong','观望':'watch','弱势':'weak'})[s]||'watch';}
+function probColor(p){
+  if(p>=80) return 'linear-gradient(90deg,#f85149,#ff7b72)';
+  if(p>=60) return 'linear-gradient(90deg,#e3a008,#f0883e)';
+  if(p>=40) return 'linear-gradient(90deg,#1f6feb,#58a6ff)';
+  return 'linear-gradient(90deg,#6e7681,#8b949e)';
+}
+function chgClass(c){return c>0?'up':(c<0?'down':'flat');}
+
+let state = {count:20, search:"", board:"", lock:"all", sortKey:"prob", sortDir:-1};
+
+function getFiltered(){
+  let arr = STOCKS.map(s=>({...s, board:boardOf(s.code)}));
+  if(state.search){const q=state.search.toLowerCase(); arr=arr.filter(s=>s.code.toLowerCase().includes(q)||s.name.toLowerCase().includes(q));}
+  if(state.board) arr=arr.filter(s=>s.board===state.board);
+  if(state.lock==="locked") arr=arr.filter(s=>s.status==="涨停·封板");
+  if(state.lock==="unlocked") arr=arr.filter(s=>s.status!=="涨停·封板");
+  const k=state.sortKey, dir=state.sortDir;
+  arr.sort((a,b)=>{
+    let va=a[k], vb=b[k];
+    if(typeof va==="string") return dir*va.localeCompare(vb,"zh");
+    return dir*(va-vb);
+  });
+  return arr;
+}
+
+function render(){
+  const all=getFiltered();
+  const n = state.count===0 ? all.length : Math.min(state.count, all.length);
+  const rows=all.slice(0,n);
+  const tb=document.getElementById("tbody");
+  if(!STOCKS.length){
+    tb.innerHTML = `<tr><td class="left" colspan="12" style="color:var(--sub);text-align:center;padding:30px">暂无可展示数据，请点击「刷新数据」重新抓取行情。</td></tr>`;
+  } else {
+    tb.innerHTML = rows.map((s)=>{
+      const chgPct=(s.chg*100);
+      const chgTxt=(chgPct>=0?"+":"")+chgPct.toFixed(2)+"%";
+      const mainE=s.mainIn/1e8;
+      const mainCls=mainE>0?'up':(mainE<0?'down':'flat');
+      const mainTxt=(mainE>=0?"+":"")+fmt(mainE,2);
+      const lockCls=tagClass(s.status);
+      return `<tr>
+        <td class="left">${s.rank}</td>
+        <td class="left code">${s.code}</td>
+        <td class="left name">${s.name}</td>
+        <td>${fmt(s.price,2)}</td>
+        <td class="${chgClass(chgPct)}">${chgTxt}</td>
+        <td>${(s.limit*100).toFixed(0)}%</td>
+        <td>${fmt(s.amount/1e8,2)}</td>
+        <td>${(s.turnover*100).toFixed(2)}%</td>
+        <td>${fmt(s.vr,2)}</td>
+        <td class="${mainCls}">${mainTxt}</td>
+        <td><span class="tag ${lockCls}">${s.status}</span></td>
+        <td><div class="probcell"><span class="probval">${s.prob.toFixed(1)}%</span>
+          <span class="bar"><i style="width:${s.prob}%;background:${probColor(s.prob)}"></i></span></div></td>
+      </tr>`;
+    }).join("");
+  }
+
+  document.querySelectorAll("thead th").forEach(th=>{
+    th.classList.remove("sorted");
+    let arr=th.querySelector(".arr"); if(!arr){arr=document.createElement("span");arr.className="arr";th.appendChild(arr);}
+    if(th.dataset.k===state.sortKey){th.classList.add("sorted");arr.textContent=state.sortDir<0?"▼":"▲";}
+    else arr.textContent="";
+  });
+
+  const topN=all.slice(0,Math.max(n,1));
+  const avg=topN.reduce((a,s)=>a+s.prob,0)/(topN.length||1);
+  const locked=all.filter(s=>s.status==="涨停·封板").length;
+  const edge=all.filter(s=>s.status==="临门一脚").length;
+  document.getElementById("stats").innerHTML=`
+    <div class="stat"><div class="k">当前展示</div><div class="v">${n}</div></div>
+    <div class="stat"><div class="k">命中样本池</div><div class="v">${all.length}</div></div>
+    <div class="stat"><div class="k">Top 平均概率</div><div class="v" style="color:var(--up)">${avg.toFixed(1)}%</div></div>
+    <div class="stat"><div class="k">已涨停</div><div class="v">${locked}</div></div>
+    <div class="stat"><div class="k">临门一脚</div><div class="v">${edge}</div></div>`;
+
+  document.getElementById("m-time").textContent=META.generated_at||"—";
+  document.getElementById("m-uni").textContent=(META.total_universe||STOCKS.length);
+}
+
+const rng=document.getElementById("rngCount"), num=document.getElementById("numCount");
+function setCount(v){v=Math.max(1,Math.min(5000,v|0));state.count=v;rng.value=Math.min(v,5000);num.value=v;
+  document.querySelectorAll("#presets button").forEach(b=>b.classList.toggle("active", b.dataset.n==String(v)));render();}
+rng.max = 5000; num.max = 5000;
+rng.addEventListener("input",e=>setCount(+e.target.value));
+num.addEventListener("input",e=>setCount(+e.target.value));
+document.querySelectorAll("#presets button").forEach(b=>b.addEventListener("click",()=>{
+  const v=b.dataset.n==="0"?0:+b.dataset.n; setCount(v);
+  if(v>0) rng.value=Math.min(v,5000); else rng.value=5000;
+}));
+document.getElementById("search").addEventListener("input",e=>{state.search=e.target.value.trim();render();});
+document.getElementById("board").addEventListener("change",e=>{state.board=e.target.value;render();});
+document.querySelectorAll("#toggleLock button").forEach(b=>b.addEventListener("click",()=>{
+  state.lock=b.dataset.v;document.querySelectorAll("#toggleLock button").forEach(x=>x.classList.toggle("active",x===b));render();}));
+document.querySelectorAll("thead th").forEach(th=>th.addEventListener("click",()=>{
+  const k=th.dataset.k; if(state.sortKey===k) state.sortDir*=-1; else {state.sortKey=k;state.sortDir=(k==="rank"||k==="code"||k==="name")?1:-1;}
+  render();}));
+
+function toast(msg,ok){const t=document.getElementById("toast");t.textContent=msg;t.className=ok?'ok':'err';t.style.display='block';
+  setTimeout(()=>{t.style.display='none';},3200);}
+
+async function loadData(){
+  try{
+    const r=await fetch('/api/screener/data');
+    const d=await r.json();
+    STOCKS=d.stocks||[]; META=d.meta||{};
+  }catch(e){ STOCKS=[]; META={}; }
+  render();
+}
+
+document.getElementById("btnRefresh").addEventListener("click",async ()=>{
+  const btn=document.getElementById("btnRefresh"); btn.disabled=true;
+  document.getElementById("refresh-status").textContent="刷新中（抓取全A行情，约1-2分钟）…";
+  try{
+    const r=await fetch('/api/screener/refresh',{method:'POST'});
+    const j=await r.json();
+    if(j.success){
+      // poll status until done
+      const timer=setInterval(async ()=>{
+        try{
+          const s=await (await fetch('/api/screener/status')).json();
+          document.getElementById("refresh-status").textContent=s.msg||"";
+          if(!s.running){clearInterval(timer);await loadData();
+            document.getElementById("refresh-status").textContent=""; btn.disabled=false;
+            toast(s.ok?"数据已刷新":"刷新失败："+s.msg, s.ok);}
+        }catch(e){}
+      },4000);
+    } else {
+      document.getElementById("refresh-status").textContent=j.msg||"刷新失败"; btn.disabled=false; toast(j.msg||"刷新失败",false);
+    }
+  }catch(e){ btn.disabled=false; document.getElementById("refresh-status").textContent=""; toast("请求失败",false);}
+});
+
+loadData();
+</script>
+</body>
+</html>
