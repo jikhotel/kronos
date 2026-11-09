@@ -467,8 +467,22 @@ def _chart_json(fig):
     import numpy as np
     obj = fig.to_plotly_json()
 
+    def _decode_binary(d):
+        """plotly>=6 的 to_plotly_json() 直接把数组编码为 {dtype, bdata}(base64, 小端);
+        浏览器端 plotly-2.27 不识别, 必须解码回纯数组。"""
+        import base64 as _b64
+        try:
+            buf = _b64.b64decode(d['bdata'])
+            return np.frombuffer(buf, dtype=np.dtype('<' + str(d['dtype']))).tolist()
+        except Exception:
+            return None
+
     def conv(v):
         if isinstance(v, dict):
+            if 'bdata' in v and 'dtype' in v and isinstance(v['bdata'], (str, bytes)):
+                decoded = _decode_binary(v)
+                if decoded is not None:
+                    return decoded
             return {k: conv(x) for k, x in v.items()}
         if isinstance(v, (list, tuple)):
             return [conv(x) for x in v]
