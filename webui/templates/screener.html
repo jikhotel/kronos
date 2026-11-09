@@ -80,6 +80,28 @@
   #toast.ok{background:#12261e;color:#3fb950;border:1px solid #238636;}
   #toast.err{background:#2d1417;color:#f85149;border:1px solid #da3633;}
   @media(max-width:620px){.countrow input[type=range]{width:150px;}}
+
+  /* ---- 手机 H5 适配 ---- */
+  @media (max-width: 768px) {
+    .topnav { padding: 10px 12px; gap: 6px; }
+    .topnav .brand { font-size: 14px; width: 100%; }
+    .topnav a { padding: 6px 10px; font-size: 12.5px; }
+    .wrap { padding: 14px 10px 46px; }
+    .title h1 { font-size: 19px; }
+    .metabar { text-align: left; }
+    .panel { padding: 12px 10px; }
+    .controls { gap: 10px 14px; }
+    .probcell .bar { width: 64px; }
+    .stat .v { font-size: 16px; }
+    table { min-width: 760px; }   /* 表格已有 .tablewrap 横向滚动 */
+    .foot { font-size: 11.5px; }
+  }
+  @media (max-width: 480px) {
+    .title h1 { font-size: 17px; }
+    .countrow input[type=range] { width: 130px; }
+    input[type=number] { width: 70px; }
+    .presets button, .toggle button { padding: 5px 9px; font-size: 12px; }
+  }
 </style>
 </head>
 <body>

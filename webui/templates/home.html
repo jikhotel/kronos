@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kronos-Lab</title>
-<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="/static/axios.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -68,6 +68,22 @@ body {
 .dot.on { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
 .dot.off { background: #8b949e; }
 footer { margin-top: 34px; color: #484f58; font-size: 12px; }
+
+/* ---- 手机 H5 适配 ---- */
+.card { width: min(420px, 100%); }
+@media (max-width: 640px) {
+  body { padding: 26px 14px; }
+  .hero { margin-bottom: 30px; }
+  .hero h1 { font-size: 26px; }
+  .hero p { font-size: 13px; }
+  .cards { gap: 16px; }
+  .card { padding: 22px 18px; }
+  .card .icon { font-size: 34px; }
+  .card h2 { font-size: 18px; }
+  .status-bar { gap: 8px; margin-top: 30px; }
+  .st { padding: 7px 12px; font-size: 12px; }
+  footer { margin-top: 24px; padding: 0 6px; }
+}
 </style>
 </head>
 <body>

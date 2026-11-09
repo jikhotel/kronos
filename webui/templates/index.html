@@ -459,13 +459,53 @@
             .main-content {
                 grid-template-columns: 1fr;
             }
-            
+
             .container {
                 padding: 10px;
             }
-            
+
             .header h1 {
-                font-size: 2rem;
+                font-size: 1.35rem;
+                line-height: 1.35;
+            }
+
+            .header p { margin-top: 6px; }
+
+            /* 图表: 手机上高度适中, 边距收紧 */
+            #chart { height: 420px; }
+            .chart-container { padding: 14px; border-radius: 10px; }
+            .chart-container h2 { font-size: 1.15rem; }
+
+            /* 控件面板紧凑化 */
+            .control-panel { padding: 14px; }
+            .time-window-container { padding: 14px; }
+            .comparison-section { padding: 14px; }
+
+            /* 对比表: 9 列在手机上允许横向滚动 */
+            .error-details > div { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .comparison-table { min-width: 640px; }
+
+            /* 错误统计卡: 双列即可 */
+            .error-stats { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* 更小屏(手机竖屏)再收紧 */
+        @media (max-width: 480px) {
+            #chart { height: 340px; }
+            .chart-toolbar { gap: 8px; padding: 8px 10px; }
+        }
+
+        /* 手机: 头部导航按钮改为整齐换行的胶囊, 避免重叠 */
+        @media (max-width: 768px) {
+            .header p { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+            .header p a, .header p span {
+                margin: 0 !important;
+                display: inline-flex;
+                align-items: center;
+                padding: 6px 10px !important;
+                font-size: 12px !important;
+                background: rgba(13, 17, 23, .55);
+                border-radius: 8px;
             }
         }
 
@@ -800,7 +840,7 @@
                     
                     <div class="error-details">
                         <h4>Detailed Comparison Data:</h4>
-                        <div style="max-height: 300px; overflow-y: auto;">
+                        <div style="max-height: 300px; overflow: auto; -webkit-overflow-scrolling: touch;">
                             <table class="comparison-table">
                                 <thead>
                                     <tr>

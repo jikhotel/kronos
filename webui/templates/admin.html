@@ -47,6 +47,21 @@ tr:hover td { background: rgba(31,111,235,.05); }
 .log-at { color: #8b949e; white-space: nowrap; }
 .log-user { color: #58d5f0; }
 .muted { color: #8b949e; }
+
+/* ---- 手机 H5 适配 ---- */
+.wrap { padding: 0 12px 40px; }
+@media (max-width: 768px) {
+  h1 { font-size: 20px; }
+  .nav { font-size: 12.5px; margin-bottom: 16px; }
+  .nav a { margin-right: 10px; }
+  .card { padding: 14px 10px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; }
+  .form-row input, .form-row select { min-width: 0; width: 100%; }
+  .form-row { flex-direction: column; gap: 8px; }
+  /* 宽表格横向滚动 */
+  .card { overflow-x: auto; }
+  .card table { min-width: 560px; }
+}
 </style>
 </head>
 <body>
