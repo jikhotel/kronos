@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kronos-lab</title>
+<title>Kronos-Lab</title>
 <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -53,6 +53,8 @@ body {
 .card.predict:hover { border-color: #58d5f0; }
 .card.quant:hover { border-color: #3fb950; box-shadow: 0 12px 40px rgba(35,134,54,.20); }
 .card.quant h2 .arrow { color: #3fb950; }
+.card.screener:hover { border-color: #e3a008; box-shadow: 0 12px 40px rgba(227,160,8,.20); }
+.card.screener h2 .arrow { color: #e3a008; }
 
 .status-bar {
   margin-top: 48px; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
@@ -70,7 +72,7 @@ footer { margin-top: 34px; color: #484f58; font-size: 12px; }
 </head>
 <body>
   <div class="hero">
-    <h1>🜂 Kronos-lab</h1>
+    <h1>🜂 Kronos-Lab</h1>
     <p>不踢飞-不T飞</p>
     <div class="badges">
       <span class="badge hl">全程本地运行</span>
@@ -98,6 +100,16 @@ footer { margin-top: 34px; color: #484f58; font-size: 12px; }
       <div class="tags">
         <span class="tag">策略管理</span><span class="tag">绩效回测</span>
         <span class="tag">模拟实盘</span><span class="tag">T+1 / 涨跌停</span>
+      </div>
+    </a>
+
+    <a class="card screener" href="/screener">
+      <div class="icon">🔥</div>
+      <h2>智能选股 <span class="arrow">→</span></h2>
+      <p>对全 A 扫描，融合当日行情 · 主力资金 · 量价 · 市值 · 资讯热度，给出涨停概率排行与候选清单，可动态调整候选数量。</p>
+      <div class="tags">
+        <span class="tag">涨停概率</span><span class="tag">资金流向</span>
+        <span class="tag">动态调仓</span><span class="tag">全A扫描</span>
       </div>
     </a>
   </div>
