@@ -1,279 +1,346 @@
 [
   {
-    "id": 5,
-    "name": "【精选·2天】稳健最优 · Kronos预测(阈值1%)",
-    "type": "kronos_forecast",
-    "symbol": "sz300456",
-    "freq": "day",
-    "params": {
-      "horizon": 2,
-      "threshold": 0.01,
-      "rebalance_every": 2,
-      "lookback": 128
-    },
-    "owner": "admin",
-    "is_public": 1,
-    "description": "[2天持有期 | 稳健最优 | 已共享]\n指标: 跨9标的平均 收益 -3.69% | 超额 +18.57pp | 夏普 -0.22 | 回撤 -14.6% | 跑赢 7/9\n综合评分: -1.64 (评分=0.5×平均收益 + 5×平均夏普 − 0.15×|平均回撤| + 0.5×跑赢标的数; 过滤平均交易<2的零交易组合(避免\"一直空仓\"的伪优解))\n逻辑: AI 隔日滚动预测: 每2根K线用最近128根预测未来2根, 预测涨幅>1%买入, 跌幅<-1%清仓。低回撤防守型, 熊市中靠择时空仓规避下跌。\n回测区间 2026-01-01 ~ 2026-11-10 | 标的 9 只(川金诺/天孚通信/罗博特科/赛微电子/贵州茅台/合肥城建/天赐材料/世纪华通/先导智能) | 共 441 次回测(经典369 + Kronos72)\n默认标的: 赛微电子(sz300456); 参数可复用至其余标的。",
-    "backtests": [
-      {
-        "id": 12,
-        "start_date": "2026-01-05",
-        "end_date": "2026-11-10",
-        "metrics": {
-          "total_return_pct": -13.78,
-          "annual_return_pct": -16.66,
-          "max_drawdown_pct": -32.12,
-          "sharpe": -0.41,
-          "n_trades": 10,
-          "n_buys": 10,
-          "win_rate_pct": 50.0,
-          "profit_factor": 0.73,
-          "buy_hold_pct": -51.96,
-          "final_equity": 86218.47,
-          "initial_capital": 100000.0
-        }
-      }
-    ]
-  },
-  {
-    "id": 6,
-    "name": "【精选·2天】收益冠军 · 双均线2/10 @天孚通信 +70.16%",
+    "id": 23,
+    "name": "[01]双均线交叉 · 德明利 @fast3_slow20",
     "type": "ma_cross",
-    "symbol": "sz300394",
+    "symbol": "sz001309",
     "freq": "day",
     "params": {
-      "fast": 2,
-      "slow": 10
+      "fast": 3,
+      "slow": 20
     },
     "owner": "admin",
     "is_public": 1,
-    "description": "[2天持有期 | 收益冠军 | 已共享]\n指标: 单标的 天孚通信 收益 +70.16% (基准 -13.91%) | 夏普 1.47 | 回撤 -23.8% | 交易 10 次\n综合评分: 冠军 (评分=0.5×平均收益 + 5×平均夏普 − 0.15×|平均回撤| + 0.5×跑赢标的数; 过滤平均交易<2的零交易组合(避免\"一直空仓\"的伪优解))\n逻辑: 超短双均线: 2日均线上穿10日均线买入, 下穿卖出。2026年天孚通信下跌市中捕捉反弹波段, 超额 +84pp。\n回测区间 2026-01-01 ~ 2026-11-10 | 标的 9 只(川金诺/天孚通信/罗博特科/赛微电子/贵州茅台/合肥城建/天赐材料/世纪华通/先导智能) | 共 441 次回测(经典369 + Kronos72)\n默认标的: 天孚通信(sz300394); 参数可复用至其余标的。",
+    "description": "智能选股池挖掘 · 稳定盈利Top10 · ma_cross\n[稳健挖掘 | 样本外年化 191.5% | 样本外夏普 2.18 | 样本外回撤 -41.0% | 样本外胜率 44% | 样本外交易 9 | 全样本收益 795.8%]",
     "backtests": [
       {
-        "id": 13,
-        "start_date": "2026-01-05",
-        "end_date": "2026-11-10",
+        "id": 30,
+        "start_date": "2022-07-01",
+        "end_date": "2026-11-13",
         "metrics": {
-          "total_return_pct": 70.16,
-          "annual_return_pct": 92.21,
-          "max_drawdown_pct": -23.75,
-          "sharpe": 1.47,
-          "n_trades": 10,
-          "n_buys": 10,
-          "win_rate_pct": 50.0,
-          "profit_factor": 2.49,
-          "buy_hold_pct": -13.91,
-          "final_equity": 170157.09,
+          "total_return_pct": 795.77,
+          "annual_return_pct": 68.41,
+          "max_drawdown_pct": -42.79,
+          "sharpe": 1.33,
+          "n_trades": 32,
+          "n_buys": 32,
+          "win_rate_pct": 43.8,
+          "profit_factor": 3.03,
+          "buy_hold_pct": 508.67,
+          "final_equity": 895770.27,
           "initial_capital": 100000.0
         }
       }
     ]
   },
   {
-    "id": 7,
-    "name": "【精选·3天】稳健最优 · Kronos预测(阈值1%)",
-    "type": "kronos_forecast",
-    "symbol": "sz002602",
-    "freq": "day",
-    "params": {
-      "horizon": 3,
-      "threshold": 0.01,
-      "rebalance_every": 3,
-      "lookback": 128
-    },
-    "owner": "admin",
-    "is_public": 1,
-    "description": "[3天持有期 | 稳健最优 | 已共享]\n指标: 跨9标的平均 收益 -0.05% | 超额 +22.21pp | 夏普 +0.10 | 回撤 -14.4% | 跑赢 7/9\n综合评分: +1.80 (评分=0.5×平均收益 + 5×平均夏普 − 0.15×|平均回撤| + 0.5×跑赢标的数; 过滤平均交易<2的零交易组合(避免\"一直空仓\"的伪优解))\n逻辑: AI 三日滚动预测: 每3根K线用最近128根预测未来3根。全档唯一平均夏普为正的稳健组合, 回撤仅 -14.4%。\n回测区间 2026-01-01 ~ 2026-11-10 | 标的 9 只(川金诺/天孚通信/罗博特科/赛微电子/贵州茅台/合肥城建/天赐材料/世纪华通/先导智能) | 共 441 次回测(经典369 + Kronos72)\n默认标的: 世纪华通(sz002602); 参数可复用至其余标的。",
-    "backtests": [
-      {
-        "id": 14,
-        "start_date": "2026-01-05",
-        "end_date": "2026-11-10",
-        "metrics": {
-          "total_return_pct": -5.03,
-          "annual_return_pct": -6.15,
-          "max_drawdown_pct": -15.8,
-          "sharpe": -0.28,
-          "n_trades": 5,
-          "n_buys": 5,
-          "win_rate_pct": 40.0,
-          "profit_factor": 0.68,
-          "buy_hold_pct": -28.44,
-          "final_equity": 94968.2,
-          "initial_capital": 100000.0
-        }
-      }
-    ]
-  },
-  {
-    "id": 8,
-    "name": "【精选·3天】收益冠军 · 布林带8/1.5 @罗博特科 +107.90%",
-    "type": "bollinger",
-    "symbol": "sz300757",
-    "freq": "day",
-    "params": {
-      "period": 8,
-      "std": 1.5
-    },
-    "owner": "admin",
-    "is_public": 1,
-    "description": "[3天持有期 | 收益冠军 | 已共享]\n指标: 单标的 罗博特科 收益 +107.90% (基准 +25.72%) | 夏普 1.81 | 回撤 -16.2% | 交易 3 次\n综合评分: 冠军 (评分=0.5×平均收益 + 5×平均夏普 − 0.15×|平均回撤| + 0.5×跑赢标的数; 过滤平均交易<2的零交易组合(避免\"一直空仓\"的伪优解))\n逻辑: 短周期布林带(8根,1.5倍标准差)突破: 收盘上穿上轨买入, 下穿下轨卖出。3笔交易翻倍, 回撤仅 -16.2%。\n回测区间 2026-01-01 ~ 2026-11-10 | 标的 9 只(川金诺/天孚通信/罗博特科/赛微电子/贵州茅台/合肥城建/天赐材料/世纪华通/先导智能) | 共 441 次回测(经典369 + Kronos72)\n默认标的: 罗博特科(sz300757); 参数可复用至其余标的。",
-    "backtests": [
-      {
-        "id": 15,
-        "start_date": "2026-01-05",
-        "end_date": "2026-11-10",
-        "metrics": {
-          "total_return_pct": 107.9,
-          "annual_return_pct": 145.88,
-          "max_drawdown_pct": -16.21,
-          "sharpe": 1.81,
-          "n_trades": 3,
-          "n_buys": 3,
-          "win_rate_pct": 100.0,
-          "profit_factor": 999.0,
-          "buy_hold_pct": 25.72,
-          "final_equity": 207898.83,
-          "initial_capital": 100000.0
-        }
-      }
-    ]
-  },
-  {
-    "id": 9,
-    "name": "【精选·5天】稳健最优 · MACD 8/17/9",
+    "id": 24,
+    "name": "[02]MACD 金叉死叉 · 鼎泰高科 @fast12_slow30_signal12",
     "type": "macd",
-    "symbol": "sz300757",
-    "freq": "day",
-    "params": {
-      "fast": 8,
-      "slow": 17,
-      "signal": 9
-    },
-    "owner": "admin",
-    "is_public": 1,
-    "description": "[5天持有期 | 稳健最优 | 已共享]\n指标: 跨9标的平均 收益 +8.91% | 超额 +31.17pp | 夏普 +0.20 | 回撤 -30.2% | 跑赢 8/9\n综合评分: +4.91 (评分=0.5×平均收益 + 5×平均夏普 − 0.15×|平均回撤| + 0.5×跑赢标的数; 过滤平均交易<2的零交易组合(避免\"一直空仓\"的伪优解))\n逻辑: 周级 MACD: 8/17 EMA + 9 信号线, 金叉买入死叉卖出。全部441次寻优中综合分最高, 8/9 标的跑赢买入持有。\n回测区间 2026-01-01 ~ 2026-11-10 | 标的 9 只(川金诺/天孚通信/罗博特科/赛微电子/贵州茅台/合肥城建/天赐材料/世纪华通/先导智能) | 共 441 次回测(经典369 + Kronos72)\n默认标的: 罗博特科(sz300757); 参数可复用至其余标的。",
-    "backtests": [
-      {
-        "id": 16,
-        "start_date": "2026-01-05",
-        "end_date": "2026-11-10",
-        "metrics": {
-          "total_return_pct": 96.36,
-          "annual_return_pct": 129.22,
-          "max_drawdown_pct": -25.05,
-          "sharpe": 1.91,
-          "n_trades": 7,
-          "n_buys": 8,
-          "win_rate_pct": 71.4,
-          "profit_factor": 5.6,
-          "buy_hold_pct": 25.72,
-          "final_equity": 196363.32,
-          "initial_capital": 100000.0
-        }
-      }
-    ]
-  },
-  {
-    "id": 10,
-    "name": "【精选·5天】收益冠军 · MACD 8/17/9 @罗博特科 +96.36%",
-    "type": "macd",
-    "symbol": "sz300757",
-    "freq": "day",
-    "params": {
-      "fast": 8,
-      "slow": 17,
-      "signal": 9
-    },
-    "owner": "admin",
-    "is_public": 1,
-    "description": "[5天持有期 | 收益冠军 | 已共享]\n指标: 单标的 罗博特科 收益 +96.36% (基准 +25.72%) | 夏普 1.91 | 回撤 -25.1% | 交易 7 次\n综合评分: 冠军 (评分=0.5×平均收益 + 5×平均夏普 − 0.15×|平均回撤| + 0.5×跑赢标的数; 过滤平均交易<2的零交易组合(避免\"一直空仓\"的伪优解))\n逻辑: 同一 MACD 参数在罗博特科上的高弹性表现: 7笔交易接近翻倍, 夏普 1.91。\n回测区间 2026-01-01 ~ 2026-11-10 | 标的 9 只(川金诺/天孚通信/罗博特科/赛微电子/贵州茅台/合肥城建/天赐材料/世纪华通/先导智能) | 共 441 次回测(经典369 + Kronos72)\n默认标的: 罗博特科(sz300757); 参数可复用至其余标的。",
-    "backtests": [
-      {
-        "id": 17,
-        "start_date": "2026-01-05",
-        "end_date": "2026-11-10",
-        "metrics": {
-          "total_return_pct": 96.36,
-          "annual_return_pct": 129.22,
-          "max_drawdown_pct": -25.05,
-          "sharpe": 1.91,
-          "n_trades": 7,
-          "n_buys": 8,
-          "win_rate_pct": 71.4,
-          "profit_factor": 5.6,
-          "buy_hold_pct": 25.72,
-          "final_equity": 196363.32,
-          "initial_capital": 100000.0
-        }
-      }
-    ]
-  },
-  {
-    "id": 11,
-    "name": "【精选·10天】稳健最优 · MACD 10/26/7",
-    "type": "macd",
-    "symbol": "sz300757",
-    "freq": "day",
-    "params": {
-      "fast": 10,
-      "slow": 26,
-      "signal": 7
-    },
-    "owner": "admin",
-    "is_public": 1,
-    "description": "[10天持有期 | 稳健最优 | 已共享]\n指标: 跨9标的平均 收益 +6.12% | 超额 +28.39pp | 夏普 +0.14 | 回撤 -30.2% | 跑赢 8/9\n综合评分: +3.24 (评分=0.5×平均收益 + 5×平均夏普 − 0.15×|平均回撤| + 0.5×跑赢标的数; 过滤平均交易<2的零交易组合(避免\"一直空仓\"的伪优解))\n逻辑: 两周级 MACD: 比经典 12/26/9 更快的信号线(7)。8/9 标的跑赢基准, 适合中长线波段。\n回测区间 2026-01-01 ~ 2026-11-10 | 标的 9 只(川金诺/天孚通信/罗博特科/赛微电子/贵州茅台/合肥城建/天赐材料/世纪华通/先导智能) | 共 441 次回测(经典369 + Kronos72)\n默认标的: 罗博特科(sz300757); 参数可复用至其余标的。",
-    "backtests": [
-      {
-        "id": 18,
-        "start_date": "2026-01-05",
-        "end_date": "2026-11-10",
-        "metrics": {
-          "total_return_pct": 104.42,
-          "annual_return_pct": 140.83,
-          "max_drawdown_pct": -24.04,
-          "sharpe": 1.96,
-          "n_trades": 7,
-          "n_buys": 7,
-          "win_rate_pct": 71.4,
-          "profit_factor": 7.24,
-          "buy_hold_pct": 25.72,
-          "final_equity": 204420.87,
-          "initial_capital": 100000.0
-        }
-      }
-    ]
-  },
-  {
-    "id": 12,
-    "name": "【精选·10天】收益冠军 · MACD 12/26/9 @罗博特科 +105.64%",
-    "type": "macd",
-    "symbol": "sz300757",
+    "symbol": "sz301377",
     "freq": "day",
     "params": {
       "fast": 12,
+      "slow": 30,
+      "signal": 12
+    },
+    "owner": "admin",
+    "is_public": 1,
+    "description": "智能选股池挖掘 · 稳定盈利Top10 · macd\n[稳健挖掘 | 样本外年化 141.8% | 样本外夏普 1.88 | 样本外回撤 -34.1% | 样本外胜率 50% | 样本外交易 8 | 全样本收益 341.9%]",
+    "backtests": [
+      {
+        "id": 31,
+        "start_date": "2022-11-22",
+        "end_date": "2026-11-13",
+        "metrics": {
+          "total_return_pct": 341.89,
+          "annual_return_pct": 47.47,
+          "max_drawdown_pct": -46.43,
+          "sharpe": 1.05,
+          "n_trades": 32,
+          "n_buys": 33,
+          "win_rate_pct": 40.6,
+          "profit_factor": 2.38,
+          "buy_hold_pct": 638.65,
+          "final_equity": 441888.24,
+          "initial_capital": 100000.0
+        }
+      }
+    ]
+  },
+  {
+    "id": 25,
+    "name": "[03]双均线交叉 · 芯碁微装 @fast3_slow30",
+    "type": "ma_cross",
+    "symbol": "sh688630",
+    "freq": "day",
+    "params": {
+      "fast": 3,
+      "slow": 30
+    },
+    "owner": "admin",
+    "is_public": 1,
+    "description": "智能选股池挖掘 · 稳定盈利Top10 · ma_cross\n[稳健挖掘 | 样本外年化 138.2% | 样本外夏普 1.81 | 样本外回撤 -29.8% | 样本外胜率 43% | 样本外交易 7 | 全样本收益 570.9%]",
+    "backtests": [
+      {
+        "id": 32,
+        "start_date": "2021-04-01",
+        "end_date": "2026-11-13",
+        "metrics": {
+          "total_return_pct": 570.85,
+          "annual_return_pct": 42.21,
+          "max_drawdown_pct": -40.77,
+          "sharpe": 0.96,
+          "n_trades": 31,
+          "n_buys": 31,
+          "win_rate_pct": 38.7,
+          "profit_factor": 3.08,
+          "buy_hold_pct": 398.24,
+          "final_equity": 670852.3,
+          "initial_capital": 100000.0
+        }
+      }
+    ]
+  },
+  {
+    "id": 26,
+    "name": "[04]MACD 金叉死叉 · 江波龙 @fast6_slow20_signal12",
+    "type": "macd",
+    "symbol": "sz301308",
+    "freq": "day",
+    "params": {
+      "fast": 6,
+      "slow": 20,
+      "signal": 12
+    },
+    "owner": "admin",
+    "is_public": 1,
+    "description": "智能选股池挖掘 · 稳定盈利Top10 · macd\n[稳健挖掘 | 样本外年化 119.3% | 样本外夏普 1.71 | 样本外回撤 -34.3% | 样本外胜率 77% | 样本外交易 13 | 全样本收益 630.5%]",
+    "backtests": [
+      {
+        "id": 33,
+        "start_date": "2022-08-05",
+        "end_date": "2026-11-13",
+        "metrics": {
+          "total_return_pct": 630.49,
+          "annual_return_pct": 62.28,
+          "max_drawdown_pct": -34.96,
+          "sharpe": 1.27,
+          "n_trades": 45,
+          "n_buys": 46,
+          "win_rate_pct": 57.8,
+          "profit_factor": 2.64,
+          "buy_hold_pct": 122.45,
+          "final_equity": 730488.31,
+          "initial_capital": 100000.0
+        }
+      }
+    ]
+  },
+  {
+    "id": 27,
+    "name": "[05]RSI 超买超卖 · 世龙实业 @period14_oversold30_overbought65",
+    "type": "rsi",
+    "symbol": "sz002748",
+    "freq": "day",
+    "params": {
+      "period": 14,
+      "oversold": 30,
+      "overbought": 65
+    },
+    "owner": "admin",
+    "is_public": 1,
+    "description": "智能选股池挖掘 · 稳定盈利Top10 · rsi\n[稳健挖掘 | 样本外年化 29.5% | 样本外夏普 1.30 | 样本外回撤 -29.1% | 样本外胜率 100% | 样本外交易 6 | 全样本收益 571.4%]",
+    "backtests": [
+      {
+        "id": 34,
+        "start_date": "2015-03-19",
+        "end_date": "2026-11-13",
+        "metrics": {
+          "total_return_pct": 571.41,
+          "annual_return_pct": 18.59,
+          "max_drawdown_pct": -38.95,
+          "sharpe": 0.74,
+          "n_trades": 17,
+          "n_buys": 17,
+          "win_rate_pct": 76.5,
+          "profit_factor": 4.85,
+          "buy_hold_pct": -32.88,
+          "final_equity": 671411.57,
+          "initial_capital": 100000.0
+        }
+      }
+    ]
+  },
+  {
+    "id": 28,
+    "name": "[06]RSI 超买超卖 · 美的集团 @period9_oversold35_overbought70",
+    "type": "rsi",
+    "symbol": "sz000333",
+    "freq": "day",
+    "params": {
+      "period": 9,
+      "oversold": 35,
+      "overbought": 70
+    },
+    "owner": "admin",
+    "is_public": 1,
+    "description": "智能选股池挖掘 · 稳定盈利Top10 · rsi\n[稳健挖掘 | 样本外年化 21.1% | 样本外夏普 1.32 | 样本外回撤 -16.6% | 样本外胜率 92% | 样本外交易 12 | 全样本收益 622.8%]",
+    "backtests": [
+      {
+        "id": 35,
+        "start_date": "2013-09-18",
+        "end_date": "2026-11-13",
+        "metrics": {
+          "total_return_pct": 622.81,
+          "annual_return_pct": 17.25,
+          "max_drawdown_pct": -36.99,
+          "sharpe": 0.82,
+          "n_trades": 38,
+          "n_buys": 38,
+          "win_rate_pct": 81.6,
+          "profit_factor": 3.63,
+          "buy_hold_pct": 123.58,
+          "final_equity": 722811.12,
+          "initial_capital": 100000.0
+        }
+      }
+    ]
+  },
+  {
+    "id": 29,
+    "name": "[07]RSI 超买超卖 · 苏美达 @period9_oversold30_overbought75",
+    "type": "rsi",
+    "symbol": "sh600710",
+    "freq": "day",
+    "params": {
+      "period": 9,
+      "oversold": 30,
+      "overbought": 75
+    },
+    "owner": "admin",
+    "is_public": 1,
+    "description": "智能选股池挖掘 · 稳定盈利Top10 · rsi\n[稳健挖掘 | 样本外年化 17.9% | 样本外夏普 0.86 | 样本外回撤 -19.0% | 样本外胜率 100% | 样本外交易 7 | 全样本收益 2167.3%]",
+    "backtests": [
+      {
+        "id": 36,
+        "start_date": "2008-06-17",
+        "end_date": "2026-11-13",
+        "metrics": {
+          "total_return_pct": 2167.34,
+          "annual_return_pct": 21.73,
+          "max_drawdown_pct": -66.42,
+          "sharpe": 0.84,
+          "n_trades": 31,
+          "n_buys": 32,
+          "win_rate_pct": 83.9,
+          "profit_factor": 6.43,
+          "buy_hold_pct": 114.42,
+          "final_equity": 2267338.48,
+          "initial_capital": 100000.0
+        }
+      }
+    ]
+  },
+  {
+    "id": 30,
+    "name": "[08]MACD 金叉死叉 · 普冉股份 @fast8_slow26_signal9",
+    "type": "macd",
+    "symbol": "sh688766",
+    "freq": "day",
+    "params": {
+      "fast": 8,
       "slow": 26,
       "signal": 9
     },
     "owner": "admin",
     "is_public": 1,
-    "description": "[10天持有期 | 收益冠军 | 已共享]\n指标: 单标的 罗博特科 收益 +105.64% (基准 +25.72%) | 夏普 2.00 | 回撤 -22.8% | 交易 5 次\n综合评分: 冠军 (评分=0.5×平均收益 + 5×平均夏普 − 0.15×|平均回撤| + 0.5×跑赢标的数; 过滤平均交易<2的零交易组合(避免\"一直空仓\"的伪优解))\n逻辑: 经典 MACD 12/26/9 在罗博特科上: 5笔交易翻倍, 夏普 2.00 为全部441次回测单标的最高。\n回测区间 2026-01-01 ~ 2026-11-10 | 标的 9 只(川金诺/天孚通信/罗博特科/赛微电子/贵州茅台/合肥城建/天赐材料/世纪华通/先导智能) | 共 441 次回测(经典369 + Kronos72)\n默认标的: 罗博特科(sz300757); 参数可复用至其余标的。",
+    "description": "智能选股池挖掘 · 稳定盈利Top10 · macd\n[稳健挖掘 | 样本外年化 105.2% | 样本外夏普 1.47 | 样本外回撤 -39.5% | 样本外胜率 44% | 样本外交易 16 | 全样本收益 343.0%]",
     "backtests": [
       {
-        "id": 19,
-        "start_date": "2026-01-05",
-        "end_date": "2026-11-10",
+        "id": 37,
+        "start_date": "2021-08-23",
+        "end_date": "2026-11-13",
         "metrics": {
-          "total_return_pct": 105.64,
-          "annual_return_pct": 142.6,
-          "max_drawdown_pct": -22.78,
-          "sharpe": 2.0,
-          "n_trades": 5,
-          "n_buys": 5,
-          "win_rate_pct": 80.0,
-          "profit_factor": 7.94,
-          "buy_hold_pct": 25.72,
-          "final_equity": 205636.7,
+          "total_return_pct": 343.04,
+          "annual_return_pct": 34.84,
+          "max_drawdown_pct": -50.78,
+          "sharpe": 0.84,
+          "n_trades": 48,
+          "n_buys": 49,
+          "win_rate_pct": 39.6,
+          "profit_factor": 2.04,
+          "buy_hold_pct": -43.97,
+          "final_equity": 443040.61,
+          "initial_capital": 100000.0
+        }
+      }
+    ]
+  },
+  {
+    "id": 31,
+    "name": "[09]MACD 金叉死叉 · 佰维存储 @fast10_slow30_signal12",
+    "type": "macd",
+    "symbol": "sh688525",
+    "freq": "day",
+    "params": {
+      "fast": 10,
+      "slow": 30,
+      "signal": 12
+    },
+    "owner": "admin",
+    "is_public": 1,
+    "description": "智能选股池挖掘 · 稳定盈利Top10 · macd\n[稳健挖掘 | 样本外年化 90.8% | 样本外夏普 1.46 | 样本外回撤 -39.4% | 样本外胜率 56% | 样本外交易 9 | 全样本收益 2200.5%]",
+    "backtests": [
+      {
+        "id": 38,
+        "start_date": "2022-12-30",
+        "end_date": "2026-11-13",
+        "metrics": {
+          "total_return_pct": 2200.54,
+          "annual_return_pct": 132.62,
+          "max_drawdown_pct": -40.51,
+          "sharpe": 1.71,
+          "n_trades": 29,
+          "n_buys": 30,
+          "win_rate_pct": 62.1,
+          "profit_factor": 2.5,
+          "buy_hold_pct": 782.3,
+          "final_equity": 2300539.67,
+          "initial_capital": 100000.0
+        }
+      }
+    ]
+  },
+  {
+    "id": 32,
+    "name": "[10]双均线交叉 · 道恩股份 @fast20_slow40",
+    "type": "ma_cross",
+    "symbol": "sz002838",
+    "freq": "day",
+    "params": {
+      "fast": 20,
+      "slow": 40
+    },
+    "owner": "admin",
+    "is_public": 1,
+    "description": "智能选股池挖掘 · 稳定盈利Top10 · ma_cross\n[稳健挖掘 | 样本外年化 36.0% | 样本外夏普 1.03 | 样本外回撤 -23.6% | 样本外胜率 86% | 样本外交易 7 | 全样本收益 768.4%]",
+    "backtests": [
+      {
+        "id": 39,
+        "start_date": "2017-01-06",
+        "end_date": "2026-11-13",
+        "metrics": {
+          "total_return_pct": 768.38,
+          "annual_return_pct": 25.89,
+          "max_drawdown_pct": -46.38,
+          "sharpe": 0.84,
+          "n_trades": 24,
+          "n_buys": 24,
+          "win_rate_pct": 58.3,
+          "profit_factor": 4.62,
+          "buy_hold_pct": 22.25,
+          "final_equity": 868383.46,
           "initial_capital": 100000.0
         }
       }

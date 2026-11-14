@@ -1,159 +1,42 @@
 {
-  "version": "1.7.0",
-  "generated_at": "2026-11-11 09:38:27",
+  "version": "1.8.0",
+  "generated_at": "2026-11-13 23:38:04",
   "backtest_run": {
-    "total_runs": 441,
-    "classic_grid": 369,
-    "kronos": 72,
-    "holding_periods_days": [
-      2,
-      3,
-      5,
-      10
-    ],
-    "note": "完整 441 次网格明细保存在运行期临时目录，已随会话清理；本目录固化的是最终入选结果"
+    "total_runs": 19982,
+    "candidates": 612,
+    "n_symbols": 153,
+    "gate": "稳健·样本外成交>=6且跑赢买入持有",
+    "note": "智能选股池(综合评分Top150)+Sina日线前复权+粗搜/精搜迭代+稳健盈利闸门(样本外成交>=6且跑赢买入持有)"
   },
   "persisted": {
-    "strategies_total": 9,
+    "strategies_total": 19,
     "shared_strategies": 8,
-    "backtest_records": 19,
+    "backtest_records": 29,
     "strategy_ids": [
-      5,
-      6,
-      7,
-      8,
-      9,
-      10,
-      11,
-      12
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32
     ]
   },
   "artifacts": [
     {
-      "file": "quant_1.7.db",
-      "desc": "quant/quant.db 的一致性快照（已合并 WAL），可直接放到云端 quant/quant.db"
+      "file": "quant_1.8.0.db",
+      "desc": "quant/quant.db 的一致性快照(已合并WAL), 可直接放到云端 quant/quant.db"
     },
     {
       "file": "selected_strategies.json",
-      "desc": "8 条精选策略 + 各自回测指标"
-    },
-    {
-      "file": "all_backtest_results.json",
-      "desc": "19 条回测记录的指标摘要（已剥离 trades/chart 大字段）"
+      "desc": "稳健盈利挖掘 Top10 策略(含样本外指标)"
     },
     {
       "file": "manifest.json",
-      "desc": "本清单"
-    }
-  ],
-  "csv_data": [
-    {
-      "file": "002208_sz002208_日线_前复权.csv",
-      "rows": 351,
-      "bytes": 21430,
-      "sha256_16": "543a034932ac7ad8"
-    },
-    {
-      "file": "002436_sz002436_日线_前复权.csv",
-      "rows": 3782,
-      "bytes": 181525,
-      "sha256_16": "99ba5c54afffdc40"
-    },
-    {
-      "file": "002602_sz002602_日线_前复权.csv",
-      "rows": 351,
-      "bytes": 23483,
-      "sha256_16": "186d81c861a1b588"
-    },
-    {
-      "file": "002669_sz002669_日线_前复权.csv",
-      "rows": 3293,
-      "bytes": 208193,
-      "sha256_16": "042531250a86d0cd"
-    },
-    {
-      "file": "002709_sz002709_日线_前复权.csv",
-      "rows": 351,
-      "bytes": 23283,
-      "sha256_16": "c83b9d24a7b7ff07"
-    },
-    {
-      "file": "00700_hk00700_日线_前复权.csv",
-      "rows": 5483,
-      "bytes": 303428,
-      "sha256_16": "a5a2bae5b1823e8a"
-    },
-    {
-      "file": "300394_sz300394_日线_前复权.csv",
-      "rows": 352,
-      "bytes": 24044,
-      "sha256_16": "6f0cfbd92b5c86dd"
-    },
-    {
-      "file": "300450_sz300450_日线_前复权.csv",
-      "rows": 352,
-      "bytes": 23156,
-      "sha256_16": "7c8d30b957931451"
-    },
-    {
-      "file": "300456_sz300456_日线_前复权.csv",
-      "rows": 352,
-      "bytes": 21964,
-      "sha256_16": "3418afa4bc94ef16"
-    },
-    {
-      "file": "300505_sz300505_日线_前复权.csv",
-      "rows": 352,
-      "bytes": 21699,
-      "sha256_16": "4d37f41b0231a07d"
-    },
-    {
-      "file": "300607_sz300607_日线_前复权.csv",
-      "rows": 2351,
-      "bytes": 150143,
-      "sha256_16": "3ae4ad6beef0a06f"
-    },
-    {
-      "file": "300757_sz300757_日线_前复权.csv",
-      "rows": 352,
-      "bytes": 22930,
-      "sha256_16": "2369335d930bfcf8"
-    },
-    {
-      "file": "600396_sh600396_日线_前复权.csv",
-      "rows": 6012,
-      "bytes": 277763,
-      "sha256_16": "ca157286184a768c"
-    },
-    {
-      "file": "600487_sh600487_日线_前复权.csv",
-      "rows": 5426,
-      "bytes": 340999,
-      "sha256_16": "b5cf363069069132"
-    },
-    {
-      "file": "600519_sh600519_日线_前复权.csv",
-      "rows": 351,
-      "bytes": 25393,
-      "sha256_16": "c3b8a7213850a6e4"
-    },
-    {
-      "file": "600641_sh600641_日线_前复权.csv",
-      "rows": 7821,
-      "bytes": 372446,
-      "sha256_16": "a93926a911ccd713"
-    },
-    {
-      "file": "HK_ali_09988_kline_5min_all.csv",
-      "rows": 93913,
-      "bytes": 5852037,
-      "sha256_16": "65725aeebc3de8f5"
-    },
-    {
-      "file": "regression_input.csv",
-      "rows": 2501,
-      "bytes": 147854,
-      "sha256_16": "aa5efe0121b7cc09"
+      "desc": "本快照的元信息"
     }
   ]
 }
