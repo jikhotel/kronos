@@ -1261,6 +1261,77 @@ def screener_status():
     return jsonify(_SCREENER_REFRESH)
 
 
+# ============================================================
+# 当日看板 / 龙虎榜 子系统（零额外依赖；腾讯 + 东财直连）
+# ============================================================
+try:
+    import stock_data as kronos_stock
+
+    @app.route('/dashboard')
+    def dashboard_page():
+        """当日看板（基金经理 + 操盘手视角）：指数 / 盘面宽度 / 板块排名 / 资金动向 / 个股榜单"""
+        return render_template('dashboard.html')
+
+    @app.route('/lhb')
+    def lhb_page():
+        """当日龙虎榜"""
+        return render_template('lhb.html')
+
+    @app.route('/api/indices')
+    def api_indices():
+        return jsonify(kronos_stock.get_indices())
+
+    @app.route('/api/spot')
+    def api_spot():
+        return jsonify(kronos_stock.get_spot())
+
+    @app.route('/api/fund_flow')
+    def api_fund_flow():
+        return jsonify(kronos_stock.get_fund_flow())
+
+    @app.route('/api/sector_rank')
+    def api_sector_rank():
+        return jsonify(kronos_stock.get_sector_rank())
+
+    @app.route('/api/sector_capital')
+    def api_sector_capital():
+        return jsonify(kronos_stock.get_sector_capital_flow())
+
+    @app.route('/api/dragon_tiger')
+    def api_dragon_tiger():
+        try:
+            days = int(request.args.get('days', 12))
+        except Exception:
+            days = 12
+        days = max(1, min(days, 60))
+        return jsonify(kronos_stock.get_dragon_tiger(days=days))
+
+    @app.route('/api/quote')
+    def api_quote():
+        code = (request.args.get('code') or '').strip()
+        return jsonify(kronos_stock.get_quote(code))
+
+    @app.route('/api/kline')
+    def api_kline():
+        symbol = (request.args.get('symbol') or '').strip()
+        period = request.args.get('period', 'day')
+        try:
+            count = int(request.args.get('count', 120))
+        except Exception:
+            count = 120
+        return jsonify(kronos_stock.get_kline(symbol, period, count))
+
+    @app.route('/api/intraday')
+    def api_intraday():
+        symbol = (request.args.get('symbol') or '').strip()
+        return jsonify(kronos_stock.get_intraday(symbol))
+
+    DASHBOARD_AVAILABLE = True
+except Exception as _dash_err:
+    DASHBOARD_AVAILABLE = False
+    print(f"Warning: dashboard/LHB subsystem unavailable: {_dash_err}")
+
+
 if __name__ == '__main__':
     print("Starting Kronos Web UI...")
     print(f"Model availability: {MODEL_AVAILABLE}")

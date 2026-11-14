@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kronos-Lab · 当日看板</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#21262d; --ink:#e6edf3; --sub:#8b949e;
+    --accent:#1f6feb; --accent2:#58d5f0;
+    --up:#f85149; --down:#3fb950;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;}
+  .topnav{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:16px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#11161d,#0d1117);}
+  .topnav .brand{font-weight:700;font-size:16px;margin-right:8px;
+    background:linear-gradient(90deg,#58d5f0,#a371f7);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .topnav a{color:var(--sub);text-decoration:none;font-size:13.5px;border:1px solid var(--line);padding:6px 14px;border-radius:6px;transition:.15s;}
+  .topnav a:hover{color:var(--accent2);border-color:var(--accent2);}
+  .topnav a.cur{color:#0d1117;background:var(--accent2);border-color:var(--accent2);font-weight:600;}
+  .topnav .spacer{flex:1;}
+  .topnav .who{color:var(--sub);font-size:13px;}
+  .wrap{max-width:1320px;margin:0 auto;padding:22px 18px 60px;}
+  header.head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin:18px 0 16px;}
+  .title h1{margin:0;font-size:23px;}
+  .title h1 .grad{background:linear-gradient(90deg,var(--accent2),#a371f7);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .title p{margin:6px 0 0;color:var(--sub);font-size:13px;}
+  .metabar{font-size:12.5px;color:var(--sub);text-align:right;}
+  .metabar b{color:var(--ink);}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;}
+  .panel h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .panel h3 .pill{font-size:11px;color:var(--sub);font-weight:400;border:1px solid var(--line);padding:1px 8px;border-radius:999px;}
+  .src{margin-left:auto;font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);color:var(--sub);}
+  .src.ok{color:#3fb950;border-color:rgba(63,185,80,.4);}
+  .src.warn{color:#e3a008;border-color:rgba(227,160,8,.4);}
+  .src.bad{color:#f85149;border-color:rgba(248,81,73,.4);}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+  .idx{background:#0d1117;border:1px solid var(--line);border-radius:10px;padding:11px 13px;}
+  .idx .k{font-size:12px;color:var(--sub);}
+  .idx .v{font-size:20px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums;}
+  .idx .d{font-size:12.5px;margin-top:1px;}
+  .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;}
+  .stat{background:#0d1117;border:1px solid var(--line);border-radius:10px;padding:9px 14px;}
+  .stat .k{font-size:11.5px;color:var(--sub);}
+  .stat .v{font-size:19px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .dist{display:flex;height:22px;border-radius:6px;overflow:hidden;margin-top:6px;border:1px solid var(--line);}
+  .dist>div{display:flex;align-items:center;justify-content:center;font-size:11px;color:#0d1117;font-weight:600;}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel);}
+  table{border-collapse:collapse;width:100%;min-width:760px;}
+  thead th{position:sticky;top:0;background:#11161d;color:var(--sub);font-weight:600;font-size:12.5px;text-align:right;
+    padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;user-select:none;}
+  thead th.left{text-align:left;}
+  thead th:hover{color:var(--accent2);}
+  thead th .arr{font-size:10px;opacity:.5;margin-left:3px;}
+  thead th.sorted .arr{opacity:1;color:var(--accent2);}
+  tbody td{padding:10px 12px;border-bottom:1px solid #1a2029;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  tbody td.left{text-align:left;}
+  tbody tr:hover{background:#1c2128;}
+  .code{color:var(--sub);font-size:12.5px;font-family:ui-monospace,monospace;cursor:pointer;text-decoration:none;}
+  .code:hover{color:var(--accent2);text-decoration:underline;}
+  .name{font-weight:600;}
+  .up{color:var(--up);} .down{color:var(--down);} .flat{color:var(--sub);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .foot{margin-top:18px;color:var(--sub);font-size:12px;line-height:1.7;}
+  @media(max-width:780px){.grid2{grid-template-columns:1fr;}.title h1{font-size:19px;}.metabar{text-align:left;}}
+</style>
+</head>
+<body>
+<div class="topnav">
+  <span class="brand">🜂 Kronos-Lab</span>
+  <a href="/">🏠 首页</a>
+  <a href="/predict">📈 K 线预测</a>
+  <a href="/quant">🤖 量化交易</a>
+  <a href="/screener">🔥 智能选股</a>
+  <a href="/dashboard" class="cur">📊 当日看板</a>
+  <a href="/lhb">🐯 龙虎榜</a>
+  <span class="spacer"></span>
+  {% if u %}
+  <span class="who">👤 {{ u.username }}{% if u.role == 'admin' %} · admin{% endif %}</span>
+  {% if u.role == 'admin' %}<a href="/admin">⚙️ 用户管理</a>{% endif %}
+  <a href="/account">🔑 改密</a>
+  <a href="/logout">退出登录</a>
+  {% endif %}
+</div>
+
+<div class="wrap">
+  <header class="head">
+    <div class="title">
+      <h1>当日<span class="grad">看板</span> <span style="font-size:14px;color:var(--sub)">· 基金经理 + 操盘手视角</span></h1>
+      <p>先看大势 → 再看钱往哪流 → 最后找标的。大盘指数 / 盘面宽度 / 板块排名 / 资金动向 / 个股榜单。</p>
+    </div>
+    <div class="metabar">
+      数据时间：<b id="m-time">加载中…</b><br>
+      数据源：<b>腾讯财经 · 东方财富</b><br>
+      <span id="dashSrc" class="src">初始化</span>
+    </div>
+  </header>
+
+  <!-- 1) 大盘指数 -->
+  <div class="panel">
+    <h3>大盘指数 <span class="pill">实时</span><span id="idxSrc" class="src">—</span></h3>
+    <div class="cards" id="idxCards"></div>
+  </div>
+
+  <!-- 2) 盘面宽度 / 市场温度 -->
+  <div class="panel">
+    <h3>盘面宽度 · 市场温度 <span class="pill">全A</span><span id="breadthSrc" class="src">—</span></h3>
+    <div class="stats" id="statCards"></div>
+    <div id="distWrap" style="margin-top:12px"></div>
+  </div>
+
+  <!-- 3) 板块排名 -->
+  <div class="panel">
+    <h3>板块排名（行业涨跌）<span class="pill">点击列头排序</span><span id="secSrc" class="src">—</span></h3>
+    <div class="tablewrap">
+      <table id="sectorTable">
+        <thead><tr>
+          <th class="left" data-k="sector">板块</th>
+          <th data-k="avg_pct">涨跌幅</th>
+          <th data-k="up">上涨</th>
+          <th data-k="down">下跌</th>
+          <th class="left" data-k="leader">领涨股</th>
+          <th data-k="leader_pct">领涨股%</th>
+          <th data-k="turnover">换手率</th>
+          <th data-k="total_mv">总市值(亿)</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 4) 资金动向 -->
+  <div class="panel">
+    <h3>资金动向 <span class="pill">主力净流入</span><span id="capSrc" class="src">—</span></h3>
+    <div class="grid2">
+      <div>
+        <div style="font-size:13px;color:var(--sub);margin-bottom:8px">板块主力净流入 Top</div>
+        <div class="tablewrap">
+          <table id="sectorCapTable">
+            <thead><tr>
+              <th class="left" data-k="sector">板块</th>
+              <th data-k="main_net">主力净流入(亿)</th>
+              <th data-k="main_pct">净占比</th>
+              <th data-k="pct_change">板块%</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:13px;color:var(--sub);margin-bottom:8px">个股主力净流入 Top20（代码可点击）</div>
+        <div class="tablewrap">
+          <table id="stockCapTable">
+            <thead><tr>
+              <th class="left" data-k="code">代码</th>
+              <th class="left" data-k="name">名称</th>
+              <th data-k="price">最新价</th>
+              <th data-k="pct_change">涨跌幅</th>
+              <th data-k="main_net">主力净流入(亿)</th>
+              <th data-k="main_pct">净占比</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5) 个股榜单 Top10 -->
+  <div class="panel">
+    <h3>个股榜单 Top10 <span class="pill">操盘手选股池</span><span id="rankSrc" class="src">—</span></h3>
+    <div class="grid2">
+      <div class="tablewrap">
+        <table id="rankUp"><thead><tr><th class="left">#</th><th class="left" data-k="code">代码</th><th class="left" data-k="name">名称</th><th data-k="pct_change">涨跌幅</th><th data-k="price">最新价</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="tablewrap">
+        <table id="rankDown"><thead><tr><th class="left">#</th><th class="left" data-k="code">代码</th><th class="left" data-k="name">名称</th><th data-k="pct_change">涨跌幅</th><th data-k="price">最新价</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="tablewrap">
+        <table id="rankTurn"><thead><tr><th class="left">#</th><th class="left" data-k="code">代码</th><th class="left" data-k="name">名称</th><th data-k="turnover">换手率</th><th data-k="price">最新价</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="tablewrap">
+        <table id="rankMv"><thead><tr><th class="left">#</th><th class="left" data-k="code">代码</th><th class="left" data-k="name">名称</th><th data-k="total_mv">总市值(亿)</th><th data-k="price">最新价</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    数据来源：大盘指数 / 个股实时行情 / 分时 / K线 取自 <b>腾讯财经</b>；全A快照 / 板块 / 龙虎榜 取自 <b>东方财富</b> 公开接口。
+    所有数据均为实时公开行情，仅供研究参考，<b>不构成投资建议</b>。盘面宽度与个股榜单依赖全A快照（首次加载约需 1–2 分钟，之后 60 秒内复用缓存）。
+  </div>
+</div>
+
+{% include '_stock_modal.html' %}
+
+<script>
+const fmt=(n,d=2)=> (n==null||isNaN(n))?"—":Number(n).toLocaleString("zh-CN",{minimumFractionDigits:d,maximumFractionDigits:d});
+const yi=v=> (v==null)?"—":(v/1e8).toFixed(2)+"亿";
+const clsPct=p=> p>0?'up':(p<0?'down':'flat');
+const pctTxt=p=> (p==null)?"—":((p>=0?'+':'')+p.toFixed(2)+'%');
+const srcClass=s=> ({realtime:'ok',eastmoney:'ok',akshare:'ok',sample:'warn',none:'bad'}[s]||'warn');
+const srcText=s=> ({realtime:'腾讯实时',eastmoney:'东财实时',akshare:'东财(AKShare)',sample:'离线样例',none:'不可用'}[s]||s);
+
+function setSrc(id,s){
+  const el=document.getElementById(id); if(!el) return;
+  el.className='src '+srcClass(s); el.textContent=srcText(s);
+}
+
+// ---- 大盘指数 ----
+function renderIndices(d){
+  setSrc('idxSrc', d.source||'none');
+  const box=document.getElementById('idxCards');
+  if(!d.rows||!d.rows.length){ box.innerHTML='<div style="color:var(--sub)">指数数据不可用</div>'; return; }
+  box.innerHTML=d.rows.map(r=>{
+    const c=clsPct(r.pct_change);
+    return `<div class="idx"><div class="k">${r.name}</div>
+      <div class="v">${fmt(r.price)}</div>
+      <div class="d ${c}">${pctTxt(r.pct_change)}</div></div>`;
+  }).join('');
+}
+
+// ---- 盘面宽度 ----
+function renderBreadth(d){
+  setSrc('breadthSrc', d.source||'none');
+  const rows=(d.rows||[]).filter(r=>r.pct_change!=null && !isNaN(r.pct_change));
+  const n=rows.length;
+  const up=rows.filter(r=>r.pct_change>0).length;
+  const down=rows.filter(r=>r.pct_change<0).length;
+  const flat=n-up-down;
+  const lu=rows.filter(r=>r.pct_change>=9.5).length;
+  const ld=rows.filter(r=>r.pct_change<=-9.5).length;
+  const avg=n? rows.reduce((s,r)=>s+r.pct_change,0)/n : 0;
+  const cards=[
+    {k:'A股总数',v:n},{k:'上涨',v:up,c:'up'},{k:'下跌',v:down,c:'down'},
+    {k:'涨停(≥9.5%)',v:lu,c:'up'},{k:'跌停(≤-9.5%)',v:ld,c:'down'},
+    {k:'平均涨幅',v:pctTxt(avg),c:avg>=0?'up':'down'},
+  ];
+  document.getElementById('statCards').innerHTML=cards.map(c=>
+    `<div class="stat"><div class="k">${c.k}</div><div class="v ${c.c||''}">${c.v}</div></div>`).join('');
+  const upPct=n?up/n*100:0,downPct=n?down/n*100:0,flatPct=n?flat/n*100:0;
+  document.getElementById('distWrap').innerHTML=`<div class="dist">
+    <div style="width:${upPct}%;background:var(--up)">${upPct>8?up:''}</div>
+    <div style="width:${flatPct}%;background:#6e7681">${flatPct>8?flat:''}</div>
+    <div style="width:${downPct}%;background:var(--down)">${downPct>8?down:''}</div></div>
+    <div style="font-size:11px;color:var(--sub);margin-top:4px">红 ${up} · 灰 ${flat} · 绿 ${down}</div>`;
+}
+
+// ---- 板块排名（可排序）----
+let SEC_ROWS=[];
+function renderSector(d){
+  setSrc('secSrc', d.source||'none');
+  SEC_ROWS=d.rows||[];
+  const tb=document.querySelector('#sectorTable tbody');
+  if(!SEC_ROWS.length){ tb.innerHTML='<tr><td class="left" colspan="8" style="color:var(--sub);text-align:center;padding:24px">'+(d.note||'板块数据不可用')+'</td></tr>'; return; }
+  const k=SECTOR_SORT.k, dir=SECTOR_SORT.dir;
+  const arr=[...SEC_ROWS].sort((a,b)=>{let va=a[k],vb=b[k]; if(typeof va==='string') return dir*va.localeCompare(vb,'zh'); return dir*((va??-9e18)-(vb??-9e18));});
+  tb.innerHTML=arr.map(r=>{
+    const c=clsPct(r.avg_pct);
+    const lead=r.leader? `<a class="code" data-code="${r.leader_code||''}">${r.leader}</a>`:'—';
+    return `<tr>
+      <td class="left">${r.sector}</td>
+      <td class="${c}">${pctTxt(r.avg_pct)}</td>
+      <td>${fmt(r.up,0)}</td>
+      <td>${fmt(r.down,0)}</td>
+      <td class="left">${lead}</td>
+      <td class="${clsPct(r.leader_pct)}">${pctTxt(r.leader_pct)}</td>
+      <td>${r.turnover!=null?r.turnover.toFixed(2)+'%':'—'}</td>
+      <td>${fmt(r.total_mv,0)}</td></tr>`;
+  }).join('');
+  markSorted('#sectorTable', SECTOR_SORT.k);
+}
+let SECTOR_SORT={k:'avg_pct',dir:-1};
+
+// ---- 板块资金流 ----
+let CAP_ROWS=[];
+function renderSectorCap(d){
+  setSrc('capSrc', d.source||'none');
+  CAP_ROWS=d.rows||[];
+  const tb=document.querySelector('#sectorCapTable tbody');
+  if(!CAP_ROWS.length){ tb.innerHTML='<tr><td class="left" colspan="4" style="color:var(--sub);text-align:center;padding:20px">'+(d.note||'板块资金流不可用')+'</td></tr>'; return; }
+  const k=CAP_SORT.k, dir=CAP_SORT.dir;
+  const arr=[...CAP_ROWS].sort((a,b)=>{let va=a[k],vb=b[k]; if(typeof va==='string') return dir*va.localeCompare(vb,'zh'); return dir*((va??-9e18)-(vb??-9e18));});
+  tb.innerHTML=arr.map(r=>{
+    const net=r.main_net||0; const c=net>=0?'up':'down';
+    return `<tr><td class="left">${r.sector}</td>
+      <td class="${c}">${net>=0?'+':''}${yi(r.main_net)}</td>
+      <td class="${clsPct(r.main_pct)}">${pctTxt(r.main_pct)}</td>
+      <td class="${clsPct(r.pct_change)}">${pctTxt(r.pct_change)}</td></tr>`;
+  }).join('');
+  markSorted('#sectorCapTable', CAP_SORT.k);
+}
+let CAP_SORT={k:'main_net',dir:-1};
+
+// ---- 个股资金流 Top20 ----
+let FF_ROWS=[];
+function renderFundFlow(d){
+  FF_ROWS=d.rows||[];
+  const tb=document.querySelector('#stockCapTable tbody');
+  if(!FF_ROWS.length){ tb.innerHTML='<tr><td class="left" colspan="6" style="color:var(--sub);text-align:center;padding:20px">'+(d.note||'个股资金流不可用')+'</td></tr>'; return; }
+  const k=FF_SORT.k, dir=FF_SORT.dir;
+  const arr=[...FF_ROWS].sort((a,b)=>{let va=a[k],vb=b[k]; if(typeof va==='string') return dir*va.localeCompare(vb,'zh'); return dir*((va??-9e18)-(vb??-9e18));});
+  tb.innerHTML=arr.map(r=>{
+    const net=r.main_net||0; const c=net>=0?'up':'down';
+    return `<tr>
+      <td class="left"><a class="code" data-code="${r.code}">${r.code}</a></td>
+      <td class="left name">${r.name}</td>
+      <td>${fmt(r.price)}</td>
+      <td class="${clsPct(r.pct_change)}">${pctTxt(r.pct_change)}</td>
+      <td class="${c}">${net>=0?'+':''}${yi(r.main_net)}</td>
+      <td class="${clsPct(r.main_pct)}">${pctTxt(r.main_pct)}</td></tr>`;
+  }).join('');
+  markSorted('#stockCapTable', FF_SORT.k);
+}
+let FF_SORT={k:'main_net',dir:-1};
+
+// ---- 个股榜单 Top10 ----
+function renderRanks(d){
+  setSrc('rankSrc', d.source||'none');
+  const rows=(d.rows||[]).filter(r=>r.pct_change!=null && !isNaN(r.pct_change));
+  const top=(arr,key,asc=false)=> [...arr].filter(r=>r[key]!=null&&!isNaN(r[key])).sort((a,b)=>asc?a[key]-b[key]:b[key]-a[key]).slice(0,10);
+  const fill=(tid, arr, valOf)=>{
+    const tb=document.querySelector('#'+tid+' tbody');
+    tb.innerHTML=arr.map((r,i)=>`<tr>
+      <td class="left">${i+1}</td>
+      <td class="left"><a class="code" data-code="${r.code}">${r.code}</a></td>
+      <td class="left name">${r.name}</td>
+      ${valOf(r)}</tr>`).join('');
+  };
+  fill('rankUp', top(rows,'pct_change',false), r=>`<td class="${clsPct(r.pct_change)}">${pctTxt(r.pct_change)}</td><td>${fmt(r.price)}</td>`);
+  fill('rankDown', top(rows,'pct_change',true), r=>`<td class="${clsPct(r.pct_change)}">${pctTxt(r.pct_change)}</td><td>${fmt(r.price)}</td>`);
+  fill('rankTurn', top(rows,'turnover',false), r=>`<td>${r.turnover!=null?r.turnover.toFixed(2)+'%':'—'}</td><td>${fmt(r.price)}</td>`);
+  fill('rankMv', top(rows,'total_mv',false), r=>`<td>${fmt(r.total_mv,0)}</td><td>${fmt(r.price)}</td>`);
+}
+
+function markSorted(sel,k){
+  document.querySelectorAll(sel+' thead th').forEach(th=>{
+    th.classList.remove('sorted');
+    let arr=th.querySelector('.arr'); if(!arr){arr=document.createElement('span');arr.className='arr';th.appendChild(arr);}
+    if(th.dataset.k===k){th.classList.add('sorted');arr.textContent=th.dataset.dir<0?'▼':'▲';}
+    else arr.textContent='';
+  });
+}
+function wireSort(sel, sortObj){
+  document.querySelectorAll(sel+' thead th').forEach(th=>th.addEventListener('click',()=>{
+    const k=th.dataset.k;
+    if(sortObj.k===k) sortObj.dir*=-1; else {sortObj.k=k; sortObj.dir=(k==='sector')?1:-1;}
+    th.dataset.dir=sortObj.dir;
+    if(sel==='#sectorTable') renderSector({rows:SEC_ROWS});
+    else if(sel==='#sectorCapTable') renderSectorCap({rows:CAP_ROWS});
+    else if(sel==='#stockCapTable') renderFundFlow({rows:FF_ROWS});
+  }));
+}
+wireSort('#sectorTable', SECTOR_SORT);
+wireSort('#sectorCapTable', CAP_SORT);
+wireSort('#stockCapTable', FF_SORT);
+
+async function loadDashboard(){
+  setSrc('dashSrc','加载中…');
+  try{
+    const [idx,sec,cap]=await Promise.all([
+      fetch('/api/indices').then(r=>r.json()),
+      fetch('/api/sector_rank').then(r=>r.json()),
+      fetch('/api/sector_capital').then(r=>r.json()),
+    ]);
+    document.getElementById('m-time').textContent=(idx.updated_at||'—');
+    renderIndices(idx); renderSector(sec); renderSectorCap(cap);
+  }catch(e){ setSrc('dashSrc','部分失败'); }
+  try{
+    const [spot,ff]=await Promise.all([
+      fetch('/api/spot').then(r=>r.json()),
+      fetch('/api/fund_flow').then(r=>r.json()),
+    ]);
+    renderBreadth(spot); renderFundFlow(ff); renderRanks(spot);
+    setSrc('dashSrc', (spot.source==='eastmoney'&&ff.source==='eastmoney')?'东财实时':'部分降级');
+  }catch(e){ setSrc('dashSrc','行情失败'); }
+}
+loadDashboard();
+</script>
+</body>
+</html>

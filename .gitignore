@@ -94,6 +94,9 @@ examples/yuce/
 # Runtime prediction output (regenerable JSON from WebUI)
 webui/prediction_results/
 
+# WebUI 看板/龙虎榜 运行时行情缓存（按需重建）
+webui/cache/
+
 # Quant subsystem runtime database (strategies/backtests/orders live data)
 quant/quant.db
 quant/quant.db-wal

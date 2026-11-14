@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kronos-Lab · 当日龙虎榜</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#21262d; --ink:#e6edf3; --sub:#8b949e;
+    --accent:#e3a008; --accent2:#58d5f0;
+    --up:#f85149; --down:#3fb950;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;}
+  .topnav{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:16px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#11161d,#0d1117);}
+  .topnav .brand{font-weight:700;font-size:16px;margin-right:8px;
+    background:linear-gradient(90deg,#58d5f0,#a371f7);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .topnav a{color:var(--sub);text-decoration:none;font-size:13.5px;border:1px solid var(--line);padding:6px 14px;border-radius:6px;transition:.15s;}
+  .topnav a:hover{color:var(--accent2);border-color:var(--accent2);}
+  .topnav a.cur{color:#0d1117;background:var(--accent);border-color:var(--accent);font-weight:600;}
+  .topnav .spacer{flex:1;}
+  .topnav .who{color:var(--sub);font-size:13px;}
+  .wrap{max-width:1380px;margin:0 auto;padding:22px 18px 60px;}
+  header.head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin:18px 0 16px;}
+  .title h1{margin:0;font-size:23px;}
+  .title h1 .grad{background:linear-gradient(90deg,var(--accent),#f0883e);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .title p{margin:6px 0 0;color:var(--sub);font-size:13px;}
+  .metabar{font-size:12.5px;color:var(--sub);text-align:right;}
+  .metabar b{color:var(--ink);}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;}
+  .controls{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:12px;}
+  .ctl{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--sub);}
+  select{padding:7px 10px;background:#0d1117;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:14px;}
+  .btn{background:var(--accent);color:#0d1117;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn:hover{filter:brightness(1.08);}
+  .src{font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);color:var(--sub);}
+  .src.ok{color:#3fb950;border-color:rgba(63,185,80,.4);}
+  .src.warn{color:#e3a008;border-color:rgba(227,160,8,.4);}
+  .src.bad{color:#f85149;border-color:rgba(248,81,73,.4);}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel);}
+  table{border-collapse:collapse;width:100%;min-width:1180px;}
+  thead th{position:sticky;top:0;background:#11161d;color:var(--sub);font-weight:600;font-size:12.5px;text-align:right;
+    padding:11px 12px;border-bottom:1px solid var(--line);white-space:nowrap;user-select:none;}
+  thead th.left{text-align:left;}
+  tbody td{padding:10px 12px;border-bottom:1px solid #1a2029;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  tbody td.left{text-align:left;}
+  tbody tr:hover{background:#1c2128;}
+  .code{color:var(--sub);font-size:12.5px;font-family:ui-monospace,monospace;cursor:pointer;text-decoration:none;}
+  .code:hover{color:var(--accent2);text-decoration:underline;}
+  .name{font-weight:600;}
+  .up{color:var(--up);} .down{color:var(--down);} .flat{color:var(--sub);}
+  .reason{max-width:240px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;}
+  .foot{margin-top:18px;color:var(--sub);font-size:12px;line-height:1.7;}
+  @media(max-width:780px){.title h1{font-size:19px;}.metabar{text-align:left;}}
+</style>
+</head>
+<body>
+<div class="topnav">
+  <span class="brand">🜂 Kronos-Lab</span>
+  <a href="/">🏠 首页</a>
+  <a href="/predict">📈 K 线预测</a>
+  <a href="/quant">🤖 量化交易</a>
+  <a href="/screener">🔥 智能选股</a>
+  <a href="/dashboard">📊 当日看板</a>
+  <a href="/lhb" class="cur">🐯 龙虎榜</a>
+  <span class="spacer"></span>
+  {% if u %}
+  <span class="who">👤 {{ u.username }}{% if u.role == 'admin' %} · admin{% endif %}</span>
+  {% if u.role == 'admin' %}<a href="/admin">⚙️ 用户管理</a>{% endif %}
+  <a href="/account">🔑 改密</a>
+  <a href="/logout">退出登录</a>
+  {% endif %}
+</div>
+
+<div class="wrap">
+  <header class="head">
+    <div class="title">
+      <h1>当日<span class="grad">龙虎榜</span></h1>
+      <p>上榜个股的买卖席位净额、成交结构，以及上榜后 1 / 2 / 5 / 10 日表现，辅助判断资金意图与延续性。</p>
+    </div>
+    <div class="metabar">
+      上榜日：<b id="m-date">—</b><br>
+      记录数：<b id="m-count">—</b><br>
+      <span id="lhbSrc" class="src">初始化</span>
+    </div>
+  </header>
+
+  <div class="panel">
+    <div class="controls">
+      <div class="ctl">回溯天数
+        <select id="days">
+          <option value="3">近 3 日</option>
+          <option value="7">近 7 日</option>
+          <option value="12" selected>近 12 日</option>
+          <option value="20">近 20 日</option>
+          <option value="30">近 30 日</option>
+        </select>
+      </div>
+      <button class="btn" id="btnLoad">↻ 加载龙虎榜</button>
+      <span id="lhbErr" style="color:var(--sub);font-size:12.5px"></span>
+    </div>
+    <div class="tablewrap">
+      <table id="lhbTable">
+        <thead><tr>
+          <th class="left" data-k="code">代码</th>
+          <th class="left" data-k="name">名称</th>
+          <th data-k="pct_change">涨跌幅</th>
+          <th data-k="close">收盘价</th>
+          <th data-k="net">净买额(亿)</th>
+          <th data-k="amount">成交额(亿)</th>
+          <th data-k="net_pct">净占比</th>
+          <th data-k="turnover">换手率</th>
+          <th data-k="float_mv">流通市值(亿)</th>
+          <th class="left" data-k="reason">上榜原因</th>
+          <th data-k="1">后1日</th>
+          <th data-k="2">后2日</th>
+          <th data-k="5">后5日</th>
+          <th data-k="10">后10日</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="lhbNote" class="foot"></div>
+  </div>
+
+  <div class="foot">
+    数据来源：东方财富龙虎榜公开接口（datacenter）。净买额 / 成交额 / 流通市值 单位均为亿元；后 N 日表现为上榜后相对上榜日收盘的涨跌幅（数据未出时为 —）。
+    龙虎榜反映知名营业部的博弈，<b>不构成投资建议</b>，请结合基本面与市场环境独立判断。
+  </div>
+</div>
+
+{% include '_stock_modal.html' %}
+
+<script>
+const fmt=(n,d=2)=> (n==null||isNaN(n))?"—":Number(n).toLocaleString("zh-CN",{minimumFractionDigits:d,maximumFractionDigits:d});
+const yi=v=> (v==null)?"—":(v/1e8).toFixed(2)+"亿";
+const clsPct=p=> p>0?'up':(p<0?'down':'flat');
+const pctTxt=p=> (p==null)?"—":((p>=0?'+':'')+p.toFixed(2)+'%');
+const srcClass=s=> ({realtime:'ok',eastmoney:'ok',akshare:'ok',sample:'warn',none:'bad'}[s]||'warn');
+const srcText=s=> ({realtime:'腾讯实时',eastmoney:'东财实时',akshare:'东财(AKShare)',sample:'离线样例',none:'不可用'}[s]||s);
+
+let LHB_ROWS=[];
+let LHB_SORT={k:'net',dir:-1};
+
+function renderLHB(d){
+  const el=document.getElementById('lhbSrc'); el.className='src '+srcClass(d.source||'none'); el.textContent=srcText(d.source||'none');
+  document.getElementById('m-date').textContent=d.date||'—';
+  LHB_ROWS=d.rows||[];
+  document.getElementById('m-count').textContent=LHB_ROWS.length;
+  document.getElementById('lhbNote').textContent=d.note||'';
+  const tb=document.querySelector('#lhbTable tbody');
+  if(!LHB_ROWS.length){ tb.innerHTML='<tr><td class="left" colspan="14" style="color:var(--sub);text-align:center;padding:26px">'+(d.note||'暂无龙虎榜数据')+'</td></tr>'; return; }
+  const k=LHB_SORT.k, dir=LHB_SORT.dir;
+  const arr=[...LHB_ROWS].sort((a,b)=>{let va=a[k],vb=b[k]; if(typeof va==='string') return dir*va.localeCompare(vb,'zh'); return dir*((va??-9e18)-(vb??-9e18));});
+  tb.innerHTML=arr.map(r=>{
+    const net=r.net||0;
+    const netC=net>=0?'up':'down';
+    const after=k=>{const v=r.after?r.after[k]:null; return `<td class="${clsPct(v)}">${pctTxt(v)}</td>`;};
+    const reasonCell=`<span class="reason" title="${(r.interp||'').replace(/"/g,'')}">${r.reason||'—'}</span>`;
+    return `<tr>
+      <td class="left"><a class="code" data-code="${r.code}">${r.code}</a></td>
+      <td class="left name">${r.name}</td>
+      <td class="${clsPct(r.pct_change)}">${pctTxt(r.pct_change)}</td>
+      <td>${fmt(r.close)}</td>
+      <td class="${netC}">${net>=0?'+':''}${yi(r.net)}</td>
+      <td>${yi(r.amount)}</td>
+      <td class="${clsPct(r.net_pct)}">${pctTxt(r.net_pct)}</td>
+      <td>${r.turnover!=null?r.turnover.toFixed(2)+'%':'—'}</td>
+      <td>${fmt(r.float_mv,0)}</td>
+      <td class="left">${reasonCell}</td>
+      ${after(1)}${after(2)}${after(5)}${after(10)}</tr>`;
+  }).join('');
+  document.querySelectorAll('#lhbTable thead th').forEach(th=>{
+    th.classList.remove('sorted');
+    let arr2=th.querySelector('.arr'); if(!arr2){arr2=document.createElement('span');arr2.className='arr';th.appendChild(arr2);}
+    if(th.dataset.k===k){th.classList.add('sorted');arr2.textContent=dir<0?'▼':'▲';}
+    else arr2.textContent='';
+  });
+}
+
+async function loadLHB(){
+  const days=document.getElementById('days').value;
+  document.getElementById('lhbErr').textContent='加载中…';
+  try{
+    const d=await (await fetch('/api/dragon_tiger?days='+encodeURIComponent(days))).json();
+    renderLHB(d);
+    document.getElementById('lhbErr').textContent='';
+  }catch(e){ document.getElementById('lhbErr').textContent='加载失败：'+e; }
+}
+
+document.querySelectorAll('#lhbTable thead th').forEach(th=>th.addEventListener('click',()=>{
+  const k=th.dataset.k;
+  if(LHB_SORT.k===k) LHB_SORT.dir*=-1; else {LHB_SORT.k=k; LHB_SORT.dir=(k==='reason'||k==='name'||k==='code')?1:-1;}
+  renderLHB({rows:LHB_ROWS});
+}));
+document.getElementById('btnLoad').addEventListener('click', loadLHB);
+loadLHB();
+</script>
+</body>
+</html>

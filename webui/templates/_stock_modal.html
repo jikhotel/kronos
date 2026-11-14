@@ -1,0 +1,73 @@
+{# 共享：点击代码 -> 个股实时行情弹窗（腾讯财经）#}
+<div id="stockModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center">
+  <div style="background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(520px,92vw);max-height:88vh;overflow:auto;padding:18px 20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <h3 id="sm-title" style="margin:0;font-size:18px">个股详情</h3>
+      <button onclick="closeStock()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div id="sm-quote" style="font-size:13px;color:var(--sub)">加载中…</div>
+    <div id="sm-chart" style="margin:10px 0"></div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <a id="sm-predict" class="btn" style="text-decoration:none" target="_blank">📈 在 Kronos 预测</a>
+    </div>
+    <div id="sm-note" class="foot" style="margin-top:10px">数据来源：腾讯财经实时行情（前复权）。分时与预测仅供参考，不构成投资建议。</div>
+  </div>
+</div>
+<script>
+function fullCodeOf(c){
+  c=(c||'').trim().toLowerCase();
+  if(/^(sh|sz|bj)/.test(c)) return c;
+  if(!c || !/\d/.test(c[0])) return c;
+  if('69'.indexOf(c[0])>=0) return 'sh'+c;
+  if('48'.indexOf(c[0])>=0) return 'bj'+c;
+  return 'sz'+c;
+}
+async function openStock(code){
+  if(!code) return;
+  const m=document.getElementById('stockModal'); m.style.display='flex';
+  const r=document.getElementById('sm-quote');
+  document.getElementById('sm-title').textContent='📊 '+code;
+  const fc=fullCodeOf(code);
+  const pred=document.getElementById('sm-predict');
+  if(pred) pred.href='/predict?code='+encodeURIComponent(fc);
+  r.textContent='加载实时行情中…'; document.getElementById('sm-chart').innerHTML='';
+  try{
+    const q=await (await fetch('/api/quote?code='+encodeURIComponent(code))).json();
+    const d=q.row;
+    if(!d){ r.textContent='行情获取失败（腾讯接口不可用）'; return; }
+    document.getElementById('sm-title').textContent='📊 '+d.name+' ('+d.code+')';
+    const pc=d.pct_change||0; const c=pc>0?'up':(pc<0?'down':'flat');
+    r.innerHTML=
+      '<div style="display:flex;align-items:baseline;gap:12px">'
+        +'<span style="font-size:26px;font-weight:700" class="'+c+'">'+(d.price||0).toFixed(2)+'</span>'
+        +'<span class="'+c+'">'+(pc>=0?'+':'')+pc.toFixed(2)+'%</span></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 18px;margin-top:8px;color:var(--ink);font-size:12.5px">'
+        +'<span>今开 '+(d.open||0).toFixed(2)+'</span><span>昨收 '+(d.prev_close||0).toFixed(2)+'</span>'
+        +'<span>最高 '+(d.high||0).toFixed(2)+'</span><span>最低 '+(d.low||0).toFixed(2)+'</span>'
+        +'<span>换手率 '+(d.turnover!=null?d.turnover.toFixed(2)+'%':'—')+'</span><span>量比 '+(d.volume_ratio!=null?d.volume_ratio.toFixed(2):'—')+'</span>'
+        +'<span>成交额 '+(d.amount?(d.amount/1e8).toFixed(2)+'亿':'—')+'</span><span>总市值 '+(d.total_mv?d.total_mv.toFixed(0)+'亿':'—')+'</span>'
+      +'</div>';
+    const it=await (await fetch('/api/intraday?symbol='+encodeURIComponent(code))).json();
+    drawIntraday(it.points||[], pc>=0);
+  }catch(e){ r.textContent='行情获取失败'; }
+}
+function closeStock(){ document.getElementById('stockModal').style.display='none'; }
+document.getElementById('stockModal').addEventListener('click',function(e){ if(e.target.id==='stockModal') closeStock(); });
+function drawIntraday(points, up){
+  const box=document.getElementById('sm-chart');
+  if(!points.length){ box.innerHTML='<div style="color:var(--sub);font-size:12px">暂无分时数据</div>'; return; }
+  const W=460,H=150,pad=6;
+  const ps=points.map(p=>p.price); const min=Math.min.apply(null,ps),max=Math.max.apply(null,ps); const rng=(max-min)||1;
+  const x=i=>pad+(i/(points.length-1))*(W-2*pad);
+  const y=v=>H-pad-((v-min)/rng)*(H-2*pad);
+  let path=''; points.forEach((p,i)=>{ path+=(i?'L':'M')+x(i).toFixed(1)+' '+y(p.price).toFixed(1)+' '; });
+  const col=up?'#f85149':'#3fb950';
+  box.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="background:#0d1117;border-radius:8px">'
+    +'<path d="'+path+'" fill="none" stroke="'+col+'" stroke-width="1.4"/></svg>'
+    +'<div style="font-size:11px;color:var(--sub);margin-top:4px">当日分时（腾讯财经，前复权）</div>';
+}
+// 全局代理：点击 a.code 打开个股弹窗
+document.addEventListener('click',function(e){
+  const a=e.target.closest('a.code'); if(a){ e.preventDefault(); openStock(a.dataset.code||a.textContent.trim()); }
+});
+</script>

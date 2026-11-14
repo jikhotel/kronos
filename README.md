@@ -2,11 +2,29 @@
 
   <h2><b>Kronos-WebUI 本地增强版</b></h2>
 
-  <img src="https://img.shields.io/badge/version-1.1-blue" alt="v1.1">
+  <img src="https://img.shields.io/badge/version-1.9.0-blue" alt="v1.9.0">
   <img src="https://img.shields.io/badge/platform-macOS%20CPU-lightgrey" alt="platform">
   <img src="https://img.shields.io/badge/stocks-A%E8%82%A1%20%2B%20%E6%B8%AF%E8%82%A1-red" alt="A+HK">
 
 </div>
+
+## 🚀 v1.9.0 版本说明（2026-11-13）
+
+**当日看板 + 龙虎榜子系统并入 Kronos（原 stock-platform 功能整体迁移，单一股票仓库）**
+
+1. **当日看板（`/dashboard`）**：基金经理 + 操盘手视角的盘中全景
+   - 大盘指数（腾讯财经，7 大指数实时涨跌幅）
+   - 盘面宽度（上涨/下跌/平盘家数 + 涨跌幅分布直方图）
+   - 行业板块排名（东财，涨跌/领涨股/换手率，可排序）
+   - 资金动向（板块主力净流入榜 + 个股主力净流入 Top50）
+   - 个股榜单 Top10（涨幅 / 跌幅 / 换手率 / 总市值）
+2. **当日龙虎榜（`/lhb`）**：东财龙虎榜明细，含上榜原因与后 1/2/5/10 日表现；东财不可用时降级为「实时异动榜」
+3. **个股弹窗（共享组件）**：任意代码可点击 → 腾讯实时行情 + 当日分时 SVG 迷你图；一键「在 Kronos 预测」深链至 `/predict`
+4. **零额外依赖**：看板/龙虎榜数据层（`webui/stock_data.py`）仅用标准库直连腾讯 + 东财，无需 akshare；运行时行情缓存落 `webui/cache/`（已加入 .gitignore）
+5. **新增 API**：`/api/indices` `/api/spot` `/api/fund_flow` `/api/sector_rank` `/api/sector_capital` `/api/dragon_tiger` `/api/quote` `/api/kline` `/api/intraday`
+6. **健壮性**：东财接口偶发限流时设置分级重试与整体超时（全 A 快照 55s 上限 + 空页早停），避免看板挂起
+
+> 说明：本版本起，所有股票相关功能统一收敛到 Kronos 仓库，原独立 stock-platform 不再维护。
 
 ## 🚀 v1.1 版本说明（2026-11-05）
 
