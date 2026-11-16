@@ -14,8 +14,8 @@ param(
 #   powershell -ExecutionPolicy Bypass -File .\deploy_cloud.ps1 `
 #       -ProjectRoot C:\kronos -ExposePort80 -InstallAutostart
 #
-# 注意：云端到 github.com / codeload.github.com 直连会超时，
-#       脚本会自动回退到 ghproxy.net 镜像；也可用 -ZipPath 传入本地包。
+# 注意：云端优先 codeload.github.com，回退 GitHub archive 与 ghproxy.net 镜像；
+#       每个候选都校验 zip 中央目录，截断包不会被部署；也可用 -ZipPath 传入本地包。
 # 通过 WinRM 调用时，单条 PowerShell 命令长度上限约 3-4KB，
 #       不要用内联 base64 传大文件（会报 "The command line is too long"）。
 #
@@ -52,20 +52,46 @@ if (-not $RestartOnly) {
     if (-not $ZipPath) {
         $ZipPath = Join-Path $env:TEMP "kronos-$Tag.zip"
         $archive = "https://github.com/jikhotel/kronos/archive/refs/tags/$Tag.zip"
-        # 云端直连 GitHub 常超时，镜像站实测可用
-        $urls = @($archive, "https://ghproxy.net/$archive")
+        # 云端 codeload 实测最稳（12MB 约 1 分钟）；github archive / ghproxy 偶发被截断，
+        # 因此每个候选都写临时文件 + 校验 zip 中央目录，确认完整才替换正式包。
+        $urls = @(
+            "https://codeload.github.com/jikhotel/kronos/zip/refs/tags/$Tag",
+            $archive,
+            "https://ghproxy.net/$archive"
+        )
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
         $ok = $false
         foreach ($url in $urls) {
             try {
                 Write-Host "Downloading : $url"
-                $ProgressPreference = 'SilentlyContinue'
-                Invoke-WebRequest -Uri $url -OutFile $ZipPath -UseBasicParsing -TimeoutSec 300
-                if ((Get-Item $ZipPath).Length -gt 100000) { $ok = $true; break }
+                $tmp = "$ZipPath.part"
+                Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+                $prev = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                & curl.exe -L --fail --silent --show-error --connect-timeout 15 --max-time 300 -o $tmp $url 2>&1 | Out-Null
+                $ec = $LASTEXITCODE
+                $ErrorActionPreference = $prev
+                $size = if (Test-Path $tmp) { (Get-Item $tmp).Length } else { 0 }
+                if ($ec -ne 0 -or $size -lt 100000) {
+                    Write-Warning "download incomplete: $size bytes (exit $ec)"
+                    continue
+                }
+                $z = [IO.Compression.ZipFile]::OpenRead($tmp)
+                $entries = $z.Entries.Count
+                $z.Dispose()
+                if ($entries -lt 20) {
+                    Write-Warning "archive invalid: only $entries entries"
+                    continue
+                }
+                Move-Item $tmp $ZipPath -Force
+                $ok = $true
+                Write-Host "Archive OK  : $size bytes / $entries entries"
+                break
             } catch {
                 Write-Warning "download failed: $($_.Exception.Message.Split([char]10)[0])"
             }
         }
-        if (-not $ok) { throw "Cannot download $Tag archive (GitHub direct and ghproxy both failed)" }
+        if (-not $ok) { throw "Cannot download a valid $Tag archive (codeload / GitHub / ghproxy all failed)" }
     }
     if (-not (Test-Path $ZipPath)) { throw "Zip not found: $ZipPath" }
     Write-Host "Using zip   : $ZipPath"
