@@ -1,10 +1,11 @@
 param(
     [string]$ProjectRoot = "",
     [string]$ZipPath = "",
-    [string]$Tag = "v1.7",
+    [string]$Tag = "v1.10.1",
     [switch]$RestartOnly,
     [switch]$ExposePort80,
-    [switch]$InstallAutostart
+    [switch]$InstallAutostart,
+    [switch]$InitQuantDbIfMissing
 )
 
 # Kronos cloud deployment helper for Windows Server.
@@ -17,6 +18,12 @@ param(
 #       脚本会自动回退到 ghproxy.net 镜像；也可用 -ZipPath 传入本地包。
 # 通过 WinRM 调用时，单条 PowerShell 命令长度上限约 3-4KB，
 #       不要用内联 base64 传大文件（会报 "The command line is too long"）。
+#
+# 数据安全（v1.10.1 起）：
+#   - 线上 users.db / .secret_key / quant.db / 预测历史 / 缓存 一律保留，绝不覆盖
+#   - 旧版会用 quant_1.7.db 快照强制替换 quant.db，已移除；如需初始化空库
+#     请显式加 -InitQuantDbIfMissing（仅当 quant.db 不存在时生效）
+#   - 代码更新后无论是否由计划任务托管，都会真正重启进程加载新代码
 
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -70,13 +77,17 @@ if (-not $RestartOnly) {
     if (-not $inner) { throw "Empty archive" }
     Write-Host "Staged      : $($inner.FullName)"
 
-    # 只更新受版本管理的源码；运行时文件（users.db / .secret_key / 预测历史 /
-    # 模型缓存 / 既有 *.db）一律保留，避免覆盖线上账号与数据。
+    # 只更新受版本管理的源码；运行时文件一律保留，避免覆盖线上账号与数据。
+    # 排除：所有 *.db / WAL / SHM、密钥、预测历史、行情缓存、日志、备份。
     $n = 0
     Get-ChildItem -LiteralPath $inner.FullName -Recurse -File | ForEach-Object {
         $rel = $_.FullName.Substring($inner.FullName.Length + 1)
         if ($rel -like 'webui\prediction_results\*') { return }
-        if ($rel -like '*.db' -and $rel -notlike 'quant\artifacts\*') { return }
+        if ($rel -like 'webui\cache\*') { return }
+        if ($rel -like '*.db' -or $rel -like '*.db-wal' -or $rel -like '*.db-shm'
+            -or $rel -like '*.db.bak*') { return }
+        if ($rel -eq 'webui\.secret_key') { return }
+        if ($rel -like '*.log') { return }
         # 不要用发布包里的旧版助手覆盖正在运行的脚本自身
         if ($rel -eq 'deploy_cloud.ps1') { return }
         $dest = Join-Path $root $rel
@@ -85,24 +96,23 @@ if (-not $RestartOnly) {
         Copy-Item -LiteralPath $_.FullName -Destination $dest -Force
         $n++
     }
-    Write-Host "Copied files: $n"
+    Write-Host "Copied files: $n (runtime databases preserved)"
 
-    # 用 v1.7 快照替换量化库（441 次回测产物：9 策略 / 8 共享 / 19 回测记录）
-    $srcDb = Join-Path $root "quant\artifacts\quant_1.7.db"
+    # 线上 quant.db 一律不替换。仅当「目标缺失」且显式要求时才用包内快照初始化，
+    # 且优先使用最新快照，避免把 1.7 的旧库灌进新版本。
     $dstDb = Join-Path $root "quant\quant.db"
-    if (Test-Path $srcDb) {
-        if (Test-Path $dstDb) {
-            $bak = "$dstDb.bak_" + (Get-Date -Format "yyyyMMdd_HHmmss")
-            Copy-Item $dstDb $bak -Force
-            Write-Host "DB backup   : $bak"
+    if (-not (Test-Path $dstDb) -and $InitQuantDbIfMissing) {
+        $snap = @("quant\artifacts\quant_1.8.0.db", "quant\artifacts\quant_1.7.db") |
+                ForEach-Object { Join-Path $inner.FullName $_ } |
+                Where-Object { Test-Path $_ } | Select-Object -First 1
+        if ($snap) {
+            Copy-Item $snap $dstDb -Force
+            Remove-Item "$dstDb-wal" -Force -ErrorAction SilentlyContinue
+            Remove-Item "$dstDb-shm" -Force -ErrorAction SilentlyContinue
+            Write-Host "DB initialized from snapshot: $snap"
         }
-        Copy-Item $srcDb $dstDb -Force
-        # 残留 WAL/SHM 会把新库覆盖回旧数据
-        Remove-Item "$dstDb-wal" -Force -ErrorAction SilentlyContinue
-        Remove-Item "$dstDb-shm" -Force -ErrorAction SilentlyContinue
-        Write-Host "DB updated  : $dstDb"
-    } else {
-        Write-Warning "quant_1.7.db not found in package; existing quant.db kept"
+    } elseif (Test-Path $dstDb) {
+        Write-Host "DB preserved: $dstDb"
     }
 
     $ver = Get-Content (Join-Path $root "VERSION") -Raw
@@ -124,29 +134,32 @@ $wd = Join-Path $root "webui"
 $outLog = Join-Path $wd "service_stdout.log"
 $errLog = Join-Path $wd "service_stderr.log"
 
-if ($InstallAutostart) {
-    # 计划任务由任务计划程序托管，不受 WinRM 会话回收影响，开机自动拉起
-    $taskName = "Kronos WebUI"
-    $a = New-ScheduledTaskAction -Execute $pyExe -Argument $pyArgs -WorkingDirectory $wd
-    $t = New-ScheduledTaskTrigger -AtStartup
-    $p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-    $st = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero)
-    Register-ScheduledTask -TaskName $taskName -Action $a -Trigger $t -Principal $p -Settings $st -Force | Out-Null
-    Write-Host "Autostart   : scheduled task '$taskName' (SYSTEM / AtStartup)"
-    $running = @(Get-ScheduledTask -TaskName $taskName | Where-Object { $_.State -eq 'Running' })
-    if ($running.Count -gt 0) {
-        Write-Host "Autostart   : task already running, skip direct start"
-        $skipStart = $true
-    }
-    if (-not $skipStart -and (Get-ScheduledTask -TaskName $taskName).State -eq 'Ready') {
-        # 无现存服务时直接交给计划任务托管，避免双实例抢 7070
-        Start-ScheduledTask -TaskName $taskName
-        Write-Host "Started via : scheduled task"
-        $skipStart = $true
-    }
-}
+# 无论是否由计划任务托管，代码更新后都必须真正重启，否则服务仍跑旧代码。
+$taskName = "Kronos WebUI"
+$task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 
-if (-not $skipStart) {
+if ($InstallAutostart -or $task) {
+    if (-not $task) {
+        $a = New-ScheduledTaskAction -Execute $pyExe -Argument $pyArgs -WorkingDirectory $wd
+        $t = New-ScheduledTaskTrigger -AtStartup
+        $p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+        $st = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero)
+        Register-ScheduledTask -TaskName $taskName -Action $a -Trigger $t -Principal $p -Settings $st -Force | Out-Null
+        Write-Host "Autostart   : created scheduled task '$taskName'"
+    } else {
+        Write-Host "Autostart   : existing scheduled task '$taskName' kept"
+    }
+    # 先停任务，再停所有残留 app.py 进程，避免双实例抢 7070
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 1
+    $procs | ForEach-Object {
+        Write-Host "Stopping PID: $($_.ProcessId)"
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 2
+    Start-ScheduledTask -TaskName $taskName
+    Write-Host "Started via : scheduled task '$taskName'"
+} else {
     $procs | ForEach-Object {
         Write-Host "Stopping PID: $($_.ProcessId)"
         Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
