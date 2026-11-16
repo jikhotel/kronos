@@ -258,7 +258,7 @@ function renderSector(d){
   const arr=[...SEC_ROWS].sort((a,b)=>{let va=a[k],vb=b[k]; if(typeof va==='string') return dir*va.localeCompare(vb,'zh'); return dir*((va??-9e18)-(vb??-9e18));});
   tb.innerHTML=arr.map(r=>{
     const c=clsPct(r.avg_pct);
-    const lead=r.leader? `<a class="code" data-code="${r.leader_code||''}">${r.leader}</a>`:'—';
+    const lead=r.leader? (r.leader_code? ksLink(r.leader_code,r.leader,r.leader):ksEsc(r.leader)) :'—';
     return `<tr>
       <td class="left">${r.sector}</td>
       <td class="${c}">${pctTxt(r.avg_pct)}</td>
@@ -304,8 +304,8 @@ function renderFundFlow(d){
   tb.innerHTML=arr.map(r=>{
     const net=r.main_net||0; const c=net>=0?'up':'down';
     return `<tr>
-      <td class="left"><a class="code" data-code="${r.code}">${r.code}</a></td>
-      <td class="left name">${r.name}</td>
+      <td class="left">${ksLink(r.code,r.name,r.code)}</td>
+      <td class="left name">${ksLink(r.code,r.name,r.name)}</td>
       <td>${fmt(r.price)}</td>
       <td class="${clsPct(r.pct_change)}">${pctTxt(r.pct_change)}</td>
       <td class="${c}">${net>=0?'+':''}${yi(r.main_net)}</td>
@@ -324,8 +324,8 @@ function renderRanks(d){
     const tb=document.querySelector('#'+tid+' tbody');
     tb.innerHTML=arr.map((r,i)=>`<tr>
       <td class="left">${i+1}</td>
-      <td class="left"><a class="code" data-code="${r.code}">${r.code}</a></td>
-      <td class="left name">${r.name}</td>
+      <td class="left">${ksLink(r.code,r.name,r.code)}</td>
+      <td class="left name">${ksLink(r.code,r.name,r.name)}</td>
       ${valOf(r)}</tr>`).join('');
   };
   fill('rankUp', top(rows,'pct_change',false), r=>`<td class="${clsPct(r.pct_change)}">${pctTxt(r.pct_change)}</td><td>${fmt(r.price)}</td>`);

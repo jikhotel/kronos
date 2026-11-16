@@ -160,8 +160,8 @@ function renderLHB(d){
     const after=k=>{const v=r.after?r.after[k]:null; return `<td class="${clsPct(v)}">${pctTxt(v)}</td>`;};
     const reasonCell=`<span class="reason" title="${(r.interp||'').replace(/"/g,'')}">${r.reason||'—'}</span>`;
     return `<tr>
-      <td class="left"><a class="code" data-code="${r.code}">${r.code}</a></td>
-      <td class="left name">${r.name}</td>
+      <td class="left">${ksLink(r.code,r.name,r.code)}</td>
+      <td class="left name">${ksLink(r.code,r.name,r.name)}</td>
       <td class="${clsPct(r.pct_change)}">${pctTxt(r.pct_change)}</td>
       <td>${fmt(r.close)}</td>
       <td class="${netC}">${net>=0?'+':''}${yi(r.net)}</td>

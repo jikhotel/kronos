@@ -376,12 +376,15 @@ def get_dragon_tiger(days=12):
 # --------------------------------------------------------------------------
 def _full_code(code):
     """返回带交易所前缀的完整代码（幂等）：
-    已带 sh/sz/bj 前缀则原样返回；否则按首位数字推断（6/9->sh, 4/8->bj, 其余->sz）。"""
+    已带 sh/sz/bj/hk 前缀则原样返回；5 位纯数字视为港股；其余按首位数字推断
+    （6/9->sh, 4/8->bj, 其余->sz）。"""
     code = (code or "").strip().lower()
-    if code.startswith(("sh", "sz", "bj")):
+    if code.startswith(("sh", "sz", "bj", "hk")):
         return code
     if not code or not code[0].isdigit():
         return code
+    if len(code) == 5 and code.isdigit():
+        return "hk" + code          # 港股 00700
     if code[0] in "69":
         return "sh" + code
     if code[0] in "48":
@@ -487,6 +490,128 @@ def get_intraday(symbol):
         return {"source": "realtime", "date": date, "points": pts}
     except Exception:
         return {"source": "none", "date": "", "points": []}
+
+
+# --------------------------------------------------------------------------
+# 多交易日分时（腾讯 day/query，一次返回最近 5 个交易日，每日 1 分钟 1 点）
+# 供「股票弹窗」按日期切换查看当日走势；含累计量/额，可算准确均价线。
+# --------------------------------------------------------------------------
+def get_intraday_days(symbol, limit=5):
+    """最近 N 个交易日的分时明细。
+
+    返回 {source, code, name, days:[{date, label, prev_close, points:[
+        {t, price, volume, amount, avg}]}]}
+    volume 为该分钟增量成交量（手/股），avg 为截至该分钟的成交均价。
+    """
+    full = _full_code(symbol)
+    if not full:
+        return {"source": "none", "days": []}
+    url = "https://web.ifzq.gtimg.cn/appstock/app/day/query?code=" + full
+    j = _get_json(url, timeout=12, tries=3)
+    if not j:
+        return {"source": "none", "days": []}
+    try:
+        node = (j.get("data") or {}).get(full) or {}
+        qt = (node.get("qt") or {}).get(full) or []
+        name = str(qt[1]) if len(qt) > 1 else ""
+        today_prev = _num(qt[4]) if len(qt) > 4 else None
+        raw_days = node.get("data") or []
+        if not isinstance(raw_days, list):
+            raw_days = []
+        # 港股成交量单位为股，A 股为手(×100)
+        mult = 1.0 if full.startswith("hk") else 100.0
+        days = []
+        for blk in raw_days[:limit]:
+            if not isinstance(blk, dict):
+                continue
+            date = str(blk.get("date") or "")
+            arr = blk.get("data") or []
+            pts = []
+            prev_vol = 0.0
+            for it in arr:
+                if not isinstance(it, str):
+                    continue
+                p = it.split()
+                if len(p) < 2:
+                    continue
+                t, price = p[0], _num(p[1])
+                if price is None:
+                    continue
+                cumvol = _num(p[2]) if len(p) > 2 else 0.0
+                cumamt = _num(p[3]) if len(p) > 3 else 0.0
+                vol = (cumvol - prev_vol) if (cumvol is not None and cumvol > prev_vol) else 0.0
+                prev_vol = cumvol or 0.0
+                avg = (cumamt / (cumvol * mult)) if (cumamt and cumvol) else price
+                pts.append({
+                    "t": (t[:2] + ":" + t[2:]) if len(t) == 4 and t.isdigit() else t,
+                    "price": price, "volume": round(vol, 2),
+                    "amount": cumamt, "avg": round(avg, 4),
+                })
+            if not pts:
+                continue
+            days.append({
+                "date": date,
+                "label": (date[4:6] + "-" + date[6:8]) if len(date) == 8 else date,
+                "points": pts,
+                "prev_close": None,     # 下面按相邻交易日收盘价回填
+            })
+        # 昨收：第 i 日的昨收 = 前一交易日(索引 i+1) 的最后一个价格
+        for i, d in enumerate(days):
+            if i + 1 < len(days):
+                d["prev_close"] = days[i + 1]["points"][-1]["price"]
+            elif i == 0 and today_prev is not None:
+                d["prev_close"] = today_prev
+            else:
+                d["prev_close"] = d["points"][0]["price"]
+        if days:
+            return {"source": "realtime", "code": full, "name": name,
+                    "updated_at": _now(), "days": days}
+    except Exception:
+        pass
+    return {"source": "none", "days": []}
+
+
+# --------------------------------------------------------------------------
+# 真实分钟 K 线（腾讯 mkline，m1/m5/m15/m30/m60）
+# --------------------------------------------------------------------------
+_MK_HOSTS = (
+    "https://ifzq.gtimg.cn/appstock/app/kline/mkline",
+    "https://proxy.finance.qq.com/ifzqgtimg/appstock/app/kline/mkline",
+)
+
+
+def get_minute_kline(symbol, period="m5", count=320):
+    """分钟级 K 线。bar 字段: {dt, date, t, o, c, h, l, v}。"""
+    p = period if period in ("m1", "m5", "m15", "m30", "m60") else "m5"
+    full = _full_code(symbol)
+    if not full:
+        return {"source": "none", "period": p, "bars": []}
+    param = "%s,%s,,%d" % (full, p, count)
+    d = None
+    for host in _MK_HOSTS:
+        d = _get_json(host + "?param=" + param, timeout=12, tries=2)
+        if d:
+            break
+    if not d:
+        return {"source": "none", "period": p, "bars": []}
+    try:
+        arr = ((d.get("data") or {}).get(full) or {}).get(p) or []
+        bars = []
+        for r in arr:
+            if not isinstance(r, (list, tuple)) or len(r) < 6:
+                continue
+            dt = str(r[0])
+            bars.append({
+                "dt": dt, "date": dt[:8],
+                "t": (dt[8:10] + ":" + dt[10:12]) if len(dt) >= 12 else dt[8:],
+                "o": _num(r[1]), "c": _num(r[2]),
+                "h": _num(r[3]), "l": _num(r[4]), "v": _num(r[5]),
+            })
+        if bars:
+            return {"source": "realtime", "code": full, "period": p, "bars": bars}
+    except Exception:
+        pass
+    return {"source": "none", "period": p, "bars": []}
 
 
 if __name__ == "__main__":

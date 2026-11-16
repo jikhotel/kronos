@@ -92,6 +92,7 @@ tr:hover td { background: #1c2128; }
 </style>
 </head>
 <body>
+{% include '_stock_modal.html' %}
 <div id="status-bar"></div>
 <div class="container">
   <header>
@@ -120,7 +121,8 @@ tr:hover td { background: #1c2128; }
       <div class="form-grid">
         <div class="form-item"><label>策略名称</label><input id="s-name" placeholder="如: 双均线-川金诺"></div>
         <div class="form-item"><label>策略类型</label><select id="s-type"></select></div>
-        <div class="form-item"><label>股票代码 (A股/港股)</label><input id="s-symbol" placeholder="300505 / 00700"></div>
+        <div class="form-item"><label>股票代码 (A股/港股)</label><input id="s-symbol" placeholder="300505 / 00700">
+          <button type="button" class="btn small" style="margin-top:5px" onclick="ksOpen(document.getElementById('s-symbol').value.trim(),'')">📈 当日走势</button></div>
         <div class="form-item"><label>初始资金</label><input id="s-capital" type="number" value="100000"></div>
         <div class="form-item"><label>佣金率</label><input id="s-commission" type="number" step="0.0001" value="0.0003"></div>
         <div class="form-item"><label>滑点</label><input id="s-slippage" type="number" step="0.001" value="0.001"></div>
@@ -353,7 +355,7 @@ function renderStrategies() {
       <td>${s.name}</td>
       <td>${(strategyTypes[s.type] || {}).label || s.type}</td>
       <td title="${desc.replace(/"/g, '&quot;')}" style="max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:normal; font-size:12px; color:#8b949e; line-height:1.5">${desc}</td>
-      <td>${s.symbol}</td>
+      <td>${ksLink(s.symbol,'',s.symbol)}</td>
       <td class="muted">${JSON.stringify(s.params)}</td>
       <td>${fmt(s.initial_capital)}</td>
       <td><span class="badge ${s.status === 'active' ? 'on' : 'off'}">${s.status === 'active' ? '运行中' : '已停止'}</span></td>
@@ -524,7 +526,7 @@ async function loadBacktestHistory() {
       ? `<button class="btn small ${b.is_public ? 'success' : ''}" onclick="toggleBtShare(${b.id}, ${b.is_public ? 0 : 1})">${b.is_public ? '🤝' : '🔒'}</button>`
       : (b.is_public ? '<span class="badge on">🤝</span>' : '<span class="muted">—</span>');
     return `<tr><td>${b.id}</td><td>${b.strategy_name}</td>
-      <td>${(strategyTypes[b.type] || {}).label || b.type}</td><td>${b.symbol}</td>
+      <td>${(strategyTypes[b.type] || {}).label || b.type}</td><td>${ksLink(b.symbol,'',b.symbol)}</td>
       <td>${b.start_date} ~ ${b.end_date}</td>
       <td class="${pnlCls(m.total_return_pct)}">${m.total_return_pct}%</td>
       <td class="${pnlCls(m.annual_return_pct)}">${m.annual_return_pct}%</td>
@@ -684,7 +686,7 @@ async function refreshLive() {
 
     const pt = document.getElementById('live-positions-tbody');
     pt.innerHTML = d.positions.length ? d.positions.map(p => `
-      <tr><td>#${p.strategy_id}</td><td>${p.symbol}</td><td>${p.name}</td>
+      <tr><td>#${p.strategy_id}</td><td>${ksLink(p.symbol,p.name,p.symbol)}</td><td>${ksLink(p.symbol,p.name,p.name)}</td>
       <td>${fmt(p.volume)}</td><td>${fmt(p.available_volume)}</td><td>${p.avg_cost}</td><td>${p.price}</td>
       <td>${fmt(p.market_value)}</td>
       <td class="${pnlCls(p.pnl)}">${pnlStr(p.pnl)} (${p.pnl_pct}%)</td></tr>`).join('')
@@ -692,7 +694,7 @@ async function refreshLive() {
 
     const ot = document.getElementById('live-orders-tbody');
     ot.innerHTML = d.orders.length ? d.orders.map(o => `
-      <tr><td>${o.id}</td><td>${o.created_at}</td><td>${o.strategy_name || '#' + o.strategy_id}</td><td>${o.symbol}</td>
+      <tr><td>${o.id}</td><td>${o.created_at}</td><td>${o.strategy_name || '#' + o.strategy_id}</td><td>${ksLink(o.symbol,'',o.symbol)}</td>
       <td class="${o.side === 'BUY' ? 'pos' : 'neg'}">${o.side === 'BUY' ? '买入' : '卖出'}</td>
       <td>${o.price}</td><td>${fmt(o.volume)}</td><td>${fmt(o.amount)}</td>
       <td><span class="badge ${o.status === 'filled' ? 'on' : 'off'}">${o.status === 'filled' ? '已成交' : '已拒绝'}</span></td>

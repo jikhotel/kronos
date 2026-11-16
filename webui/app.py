@@ -1326,6 +1326,27 @@ try:
         symbol = (request.args.get('symbol') or '').strip()
         return jsonify(kronos_stock.get_intraday(symbol))
 
+    @app.route('/api/intraday_days')
+    def api_intraday_days():
+        """最近 5 个交易日分时（含均价/昨收），供个股弹窗按日期切换。"""
+        symbol = (request.args.get('symbol') or '').strip()
+        try:
+            limit = max(1, min(int(request.args.get('limit', 5)), 5))
+        except Exception:
+            limit = 5
+        return jsonify(kronos_stock.get_intraday_days(symbol, limit=limit))
+
+    @app.route('/api/minute_kline')
+    def api_minute_kline():
+        """真实分钟 K 线：period = m1 / m5 / m15 / m30 / m60。"""
+        symbol = (request.args.get('symbol') or '').strip()
+        period = (request.args.get('period') or 'm5').strip()
+        try:
+            count = max(60, min(int(request.args.get('count', 320)), 1000))
+        except Exception:
+            count = 320
+        return jsonify(kronos_stock.get_minute_kline(symbol, period, count))
+
     DASHBOARD_AVAILABLE = True
 except Exception as _dash_err:
     DASHBOARD_AVAILABLE = False

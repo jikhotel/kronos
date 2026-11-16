@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kronos-Lab Financial Prediction Web UI v1.6</title>
+    <title>Kronos-Lab Financial Prediction Web UI v1.10.0</title>
     <script src="/static/plotly-2.27.0.min.js"></script>
     <script src="/static/axios.min.js"></script>
     <style>
@@ -604,9 +604,10 @@
     </style>
 </head>
 <body>
+{% include '_stock_modal.html' %}
     <div class="container">
         <div class="header">
-            <h1>🚀 Kronos-Lab Prediction Web UI <span style="font-size:0.5em;color:#888">v1.6</span></h1>
+            <h1>🚀 Kronos-Lab Prediction Web UI <span style="font-size:0.5em;color:#888">v1.10.0</span></h1>
             <p>AI-based financial K-line data prediction analysis platform</p>
             <p style="margin-top:8px">
                 <a href="/" style="color:#58a6ff;font-size:13px;text-decoration:none;border:1px solid #30363d;padding:5px 14px;border-radius:6px">🏠 平台首页</a>
@@ -697,6 +698,9 @@
                         <option value="">Please load data file list first</option>
                     </select>
                     <small class="form-text">Select K-line data file from data directory</small>
+                    <button type="button" id="file-stock-chart-btn" class="btn btn-secondary" style="margin-top:6px;padding:5px 12px;font-size:12px">
+                        📈 查看该股当日走势
+                    </button>
                 </div>
 
                 <button id="load-data-btn" class="btn btn-secondary">
@@ -1081,8 +1085,8 @@
                 stockResultsEl.innerHTML = items.map((it, i) => `
                     <div class="stock-item" data-idx="${i}">
                         <span class="badge ${badgeClass(it.market)}">${it.market_cn}</span>
-                        <span class="name">${it.name}</span>
-                        <span class="code">${it.code}</span>
+                        <span class="name">${ksLink(it.code, it.name, it.name)}</span>
+                        <span class="code">${ksLink(it.code, it.name, it.code)}</span>
                         <span class="py">${it.pinyin || ''}</span>
                     </div>`).join('');
                 stockResultsEl.style.display = 'block';
@@ -1099,15 +1103,23 @@
             _searchTimer = setTimeout(() => runStockSearch(q), 300);
         });
 
+        // 允许「个股走势弹窗」内的「选用该股」按钮复用选中逻辑
+        window.ksPickStock = function (code, name) {
+            const sel = (_searchResults || []).find(x => x.code === code)
+                     || { code: code, name: name || code, market_cn: '' };
+            stockSearchEl.value = `${sel.name}（${sel.market_cn || ''} ${sel.code}）`;
+            stockResultsEl.style.display = 'none';
+            stockFetchBtn.dataset.code = sel.code;  // 市场前缀代码, 如 hk00700 / sh600519
+            stockFetchBtn.disabled = false;
+        };
         stockResultsEl.addEventListener('click', function (e) {
+            // 点击名称/代码链接 -> 只弹走势，不改变当前选中
+            if (e.target.closest('a.ks-link, a.code')) return;
             const item = e.target.closest('.stock-item');
             if (!item || item.dataset.idx === undefined) return;
             const sel = _searchResults[parseInt(item.dataset.idx, 10)];
             if (!sel) return;
-            stockSearchEl.value = `${sel.name}（${sel.market_cn} ${sel.code}）`;
-            stockResultsEl.style.display = 'none';
-            stockFetchBtn.dataset.code = sel.code;  // 市场前缀代码, 如 hk00700 / sh600519
-            stockFetchBtn.disabled = false;
+            window.ksPickStock(sel.code, sel.name);
         });
 
         document.addEventListener('click', function (e) {
@@ -1640,6 +1652,19 @@
                 loadingDiv.classList.remove('show');
             }
         }
+
+        // 数据文件名里含股票代码（如 600519_sh600519_日线_前复权.csv）-> 打开当日走势
+        document.getElementById('file-stock-chart-btn').addEventListener('click', function () {
+            const sel = document.getElementById('data-file-select');
+            const txt = sel.value || (sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : '');
+            let m = txt.match(/(?:sh|sz|bj|hk)\d{6}/i);
+            if (!m) {
+                const n = txt.match(/\b(\d{6})\b/);
+                if (n) m = [n[1]];
+            }
+            if (!m) { alert('当前数据文件名中未识别到股票代码'); return; }
+            ksOpen(m[0].toLowerCase(), '');
+        });
     </script>
 </body>
 </html>

@@ -2,11 +2,28 @@
 
   <h2><b>Kronos-WebUI 本地增强版</b></h2>
 
-  <img src="https://img.shields.io/badge/version-1.9.0-blue" alt="v1.9.0">
+  <img src="https://img.shields.io/badge/version-1.10.0-blue" alt="v1.10.0">
   <img src="https://img.shields.io/badge/platform-macOS%20CPU-lightgrey" alt="platform">
   <img src="https://img.shields.io/badge/stocks-A%E8%82%A1%20%2B%20%E6%B8%AF%E8%82%A1-red" alt="A+HK">
 
 </div>
+
+## 🚀 v1.10.0 版本说明（2026-11-16）
+
+**全站股票可点击 → 当日走势弹窗（分时 + 分钟级 K 线 + 交易日切换）**
+
+1. **覆盖范围**：`/predict`、`/quant`、`/screener`、`/dashboard`、`/lhb` 五个页面出现的**股票名称与代码**均可点击；共享组件 `_stock_modal.html` 自包含样式，同时兼容浅色预测页与深色看板页；纯代码文本的 `<td>` 由自动装饰兜底覆盖（带列上下文校验，不会误伤成交量/市值）
+2. **弹窗能力**：
+   - 实时行情（现价 / 涨跌幅 / 开高低 / 换手 / 量比 / 成交额 / 总市值）
+   - 视图切换：**分时**（价格线 + 均价线 + 成交量柱 + 昨收基准）与 **1/5/15/30/60 分钟 K 线**（同花顺风格涨红跌绿实心蜡烛 + 成交量）
+   - 底部**交易日按钮**：一次请求最近 5 个交易日分时，切换日期零延迟重绘
+   - 「在 Kronos 预测」深链；预测页额外提供「✅ 选用该股」，点击后回填原搜索选择，不破坏既有流程
+3. **数据层**（`webui/stock_data.py`，仍为零额外依赖）：
+   - `get_intraday_days()`：腾讯 `day/query` 一次取 5 个交易日的分钟级分时，含累计量/额 → 准确均价线，按相邻交易日收盘回填每日昨收
+   - `get_minute_kline()`：腾讯 `mkline` 真实 m1/m5/m15/m30/m60 K 线（自动切换可用 host）
+   - mkline 覆盖不足的日期/周期自动回退为分时聚合，保证 5 天 × 6 视图全部有图；A 股 + 港股均支持
+4. **新增 API**：`/api/intraday_days`（symbol, limit≤5）、`/api/minute_kline`（symbol, period, count）
+5. **健壮性修正**：`_full_code()` 幂等并支持 5 位港股代码；弹窗引入渲染序号，避免快速切换日期/周期时旧请求覆盖新选择
 
 ## 🚀 v1.9.0 版本说明（2026-11-13）
 

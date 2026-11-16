@@ -105,6 +105,7 @@
 </style>
 </head>
 <body>
+{% include '_stock_modal.html' %}
 <div class="topnav">
   <span class="brand">🜂 Kronos-Lab</span>
   <a href="/">🏠 首页</a>
@@ -285,8 +286,8 @@ function render(){
       const lockCls=tagClass(s.status);
       return `<tr>
         <td class="left">${s.rank}</td>
-        <td class="left code">${s.code}</td>
-        <td class="left name">${s.name}</td>
+        <td class="left code">${ksLink(s.code,s.name,s.code)}</td>
+        <td class="left name">${ksLink(s.code,s.name,s.name)}</td>
         <td>${fmt(s.price,2)}</td>
         <td class="${chgClass(chgPct)}">${chgTxt}</td>
         <td>${(s.limit*100).toFixed(0)}%</td>
