@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$ProjectRoot = "",
     [string]$ZipPath = "",
     [string]$Tag = "v1.10.1",
@@ -110,8 +110,8 @@ if (-not $RestartOnly) {
         $rel = $_.FullName.Substring($inner.FullName.Length + 1)
         if ($rel -like 'webui\prediction_results\*') { return }
         if ($rel -like 'webui\cache\*') { return }
-        if ($rel -like '*.db' -or $rel -like '*.db-wal' -or $rel -like '*.db-shm'
-            -or $rel -like '*.db.bak*') { return }
+        if ($rel -like '*.db' -or $rel -like '*.db-wal' -or $rel -like '*.db-shm' -or
+            $rel -like '*.db.bak*') { return }
         if ($rel -eq 'webui\.secret_key') { return }
         if ($rel -like '*.log') { return }
         # 不要用发布包里的旧版助手覆盖正在运行的脚本自身
