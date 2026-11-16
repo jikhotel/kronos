@@ -104,10 +104,9 @@ quant/quant.db-shm
 webui/.secret_key
 bridge/*.zip
 
-# WebUI runtime user database (contains password hashes)
+# WebUI runtime user database (contains password hashes) + backups
 webui/users.db
 webui/users.db-journal
-
-# WebUI runtime user database (contains password hashes)
-webui/users.db
-webui/users.db-journal
+webui/users.db-wal
+webui/users.db-shm
+webui/users.db.bak-*
