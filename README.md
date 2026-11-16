@@ -2,11 +2,21 @@
 
   <h2><b>Kronos-WebUI 本地增强版</b></h2>
 
-  <img src="https://img.shields.io/badge/version-1.10.0-blue" alt="v1.10.0">
+  <img src="https://img.shields.io/badge/version-1.10.1-blue" alt="v1.10.1">
   <img src="https://img.shields.io/badge/platform-macOS%20CPU-lightgrey" alt="platform">
   <img src="https://img.shields.io/badge/stocks-A%E8%82%A1%20%2B%20%E6%B8%AF%E8%82%A1-red" alt="A+HK">
 
 </div>
+
+## 🚀 v1.10.1 版本说明（2026-11-16）
+
+**云端部署安全加固 + 全站页面版本标识对齐**
+
+1. `deploy_cloud.ps1`：默认版本 `v1.10.1`；部署时跳过所有 `*.db` / WAL / SHM / `.bak` / `.secret_key` / `prediction_results` / `cache` / `*.log`，绝不覆盖线上账号库、密钥、量化策略库与预测历史；移除旧版强制覆盖 `quant.db` 的高危逻辑；代码更新后无论计划任务是否 Running 都真正重启进程。
+2. 下载源改为 `codeload.github.com` 优先，每个候选写临时文件并校验 zip 中央目录，截断的归档不会被部署。
+3. 已部署至 Windows 云端（`123.207.186.241`），本地与云端页面、分时/分钟 K 线 API 返回一致。
+
+---
 
 ## 🚀 v1.10.0 版本说明（2026-11-16）
 
