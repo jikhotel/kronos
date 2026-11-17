@@ -130,13 +130,20 @@ def compute_prob(rec):
 
 
 def main():
+    # 快速连通性探测：第 1 页两个域名都拿不到就立刻失败，
+    # 避免数据源整体不可用时还要空转 56 页 / 等到超时才报错。
+    probe = fetch_page(1, tries=1, timeout=5)
+    if not probe:
+        print("ERROR: EastMoney push2/push2his unreachable, keep existing data", flush=True)
+        sys.exit(3)
+
     stocks = {}
     start = time.time()
     empty_streak = 0
     last_page = 0
     for n in range(1, PAGES + 1):
         last_page = n
-        diff = fetch_page(n)
+        diff = probe if n == 1 else fetch_page(n)
         if diff:
             empty_streak = 0
         else:
