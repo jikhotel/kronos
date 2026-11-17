@@ -1217,15 +1217,41 @@ _SCREENER_REFRESH = {"running": False, "ok": None, "msg": "", "ts": None}
 
 
 def _run_screener_gen():
-    _SCREENER_REFRESH["running"] = True
+    _SCREENER_REFRESH.update({"running": True, "ok": None, "msg": "抓取全A行情中…", "ts": None})
+    tail = []
     try:
-        _SCREENER_REFRESH["msg"] = "抓取全A行情中…"
-        subprocess.run(
-            [sys.executable, os.path.join(os.path.dirname(__file__), "screener_gen.py")],
-            check=True, timeout=420, capture_output=True,
+        here = os.path.dirname(os.path.abspath(__file__))
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+        proc = subprocess.Popen(
+            [sys.executable, os.path.join(here, "screener_gen.py")],
+            cwd=here, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace",
         )
+
+        def _pump():
+            for line in proc.stdout:
+                line = line.strip()
+                if line:
+                    tail.append(line)
+                    _SCREENER_REFRESH["msg"] = line if line.startswith("progress:") else line
+
+        t = threading.Thread(target=_pump, daemon=True)
+        t.start()
+        try:
+            rc = proc.wait(timeout=180)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            raise RuntimeError("刷新超时（180 秒）已终止，请稍后重试")
+        t.join(timeout=2)
+        if rc != 0:
+            try:
+                err = (proc.stderr.read() or "").strip()
+            except Exception:
+                err = ""
+            detail = err or (tail[-1] if tail else "数据源不可用")
+            raise RuntimeError(f"抓取失败(exit {rc})：{detail[-180:]}")
         _SCREENER_REFRESH["ok"] = True
-        _SCREENER_REFRESH["msg"] = "刷新成功"
+        _SCREENER_REFRESH["msg"] = tail[-1] if tail else "刷新成功"
     except Exception as _e:
         _SCREENER_REFRESH["ok"] = False
         _SCREENER_REFRESH["msg"] = str(_e)[:200]

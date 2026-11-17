@@ -356,7 +356,7 @@ async function loadData(){
 
 document.getElementById("btnRefresh").addEventListener("click",async ()=>{
   const btn=document.getElementById("btnRefresh"); btn.disabled=true;
-  document.getElementById("refresh-status").textContent="刷新中（抓取全A行情，约1-2分钟）…";
+  document.getElementById("refresh-status").textContent="刷新中（抓取全A行情，通常 1 分钟内）…";
   try{
     const r=await fetch('/api/screener/refresh',{method:'POST'});
     const j=await r.json();
@@ -370,7 +370,7 @@ document.getElementById("btnRefresh").addEventListener("click",async ()=>{
             document.getElementById("refresh-status").textContent=""; btn.disabled=false;
             toast(s.ok?"数据已刷新":"刷新失败："+s.msg, s.ok);}
         }catch(e){}
-      },4000);
+      },2000);
     } else {
       document.getElementById("refresh-status").textContent=j.msg||"刷新失败"; btn.disabled=false; toast(j.msg||"刷新失败",false);
     }

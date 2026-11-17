@@ -20,7 +20,8 @@
 #       不要用内联 base64 传大文件（会报 "The command line is too long"）。
 #
 # 数据安全（v1.10.1 起）：
-#   - 线上 users.db / .secret_key / quant.db / 预测历史 / 缓存 一律保留，绝不覆盖
+#   - 线上 users.db / .secret_key / quant.db / screener_data.json / 预测历史 / 缓存
+#     一律保留，绝不覆盖（选股实时快照是运行时数据，不随发布包回退）
 #   - 旧版会用 quant_1.7.db 快照强制替换 quant.db，已移除；如需初始化空库
 #     请显式加 -InitQuantDbIfMissing（仅当 quant.db 不存在时生效）
 #   - 代码更新后无论是否由计划任务托管，都会真正重启进程加载新代码
@@ -114,6 +115,7 @@ if (-not $RestartOnly) {
             $rel -like '*.db.bak*') { return }
         if ($rel -eq 'webui\.secret_key') { return }
         if ($rel -like '*.log') { return }
+        if ($rel -like 'webui\screener_data.json*') { return }
         # 不要用发布包里的旧版助手覆盖正在运行的脚本自身
         if ($rel -eq 'deploy_cloud.ps1') { return }
         $dest = Join-Path $root $rel
