@@ -2,11 +2,23 @@
 
   <h2><b>Kronos-WebUI 本地增强版</b></h2>
 
-  <img src="https://img.shields.io/badge/version-1.10.1-blue" alt="v1.10.1">
+  <img src="https://img.shields.io/badge/version-1.10.2-blue" alt="v1.10.2">
   <img src="https://img.shields.io/badge/platform-macOS%20CPU-lightgrey" alt="platform">
   <img src="https://img.shields.io/badge/stocks-A%E8%82%A1%20%2B%20%E6%B8%AF%E8%82%A1-red" alt="A+HK">
 
 </div>
+
+## 🚀 v1.10.2 版本说明（2026-11-18）
+
+**智能选股「更新实时数据」修复：提速、可见进度、失败不覆盖、部署不回退**
+
+1. `webui/screener_gen.py`：双域名 push2 / push2his 兜底、短重试 + 递增退避、页间节流、整体 120s deadline；原先 56 页 × 6 次 × 35s 导致单次刷新 2~5 分钟，现在正常路径约 20~60 秒。
+2. 数据不完整（<1000 只）或数据源不可用时 **2.5 秒快速失败并保留上一次成功的实时数据**，绝不写残缺快照；写文件改为 `OUT.tmp` + `os.replace` 原子替换。
+3. `webui/app.py`：改用 `Popen` + stdout 泵线程，把 `progress: ...` 实时透传到 `/api/screener/status`；180s 超时主动终止；失败时把子进程错误原文回显给前端。
+4. **运行时数据不再随发布包回退**：`webui/screener_data.json` 移出版本控制并加入 `.gitignore`，`deploy_cloud.ps1` 同步跳过该文件。
+5. `screener.html`：刷新提示改「通常 1 分钟内」，状态轮询 4s → 2s。
+
+---
 
 ## 🚀 v1.10.1 版本说明（2026-11-16）
 

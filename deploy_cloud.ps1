@@ -1,7 +1,7 @@
 ﻿param(
     [string]$ProjectRoot = "",
     [string]$ZipPath = "",
-    [string]$Tag = "v1.10.1",
+    [string]$Tag = "v1.10.2",
     [switch]$RestartOnly,
     [switch]$ExposePort80,
     [switch]$InstallAutostart,
