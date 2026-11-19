@@ -1379,6 +1379,54 @@ except Exception as _dash_err:
     print(f"Warning: dashboard/LHB subsystem unavailable: {_dash_err}")
 
 
+# ============================================================
+# 每日推荐（双时段策略 + 滚动验证）
+# ============================================================
+try:
+    import daily_pick as kronos_daily_pick
+
+    @app.route('/daily-pick')
+    def daily_pick_page():
+        """每日推荐：上午10:00/尾盘14:35 各10只，收盘/次日开盘验证成功率。"""
+        kronos_daily_pick.catch_up()   # 页面加载时按时间补做
+        return render_template('daily_pick.html')
+
+    @app.route('/api/daily-pick/state')
+    def api_daily_pick_state():
+        return jsonify(kronos_daily_pick.state())
+
+    @app.route('/api/daily-pick/generate', methods=['POST'])
+    def api_daily_pick_generate():
+        slot = (request.args.get('slot') or 'morning').strip()
+        if slot not in ('morning', 'afternoon'):
+            return jsonify({'ok': False, 'msg': '无效的场次'}), 400
+        try:
+            rec = kronos_daily_pick.generate(slot, force=True)
+            return jsonify({'ok': True, 'msg': '已生成 %s 场 %d 只' % (
+                '上午' if slot == 'morning' else '尾盘', len(rec['picks']))})
+        except Exception as e:
+            return jsonify({'ok': False, 'msg': '生成失败: %s' % e}), 500
+
+    @app.route('/api/daily-pick/verify', methods=['POST'])
+    def api_daily_pick_verify():
+        data = kronos_daily_pick._load()
+        done = []
+        for d, day in data['days'].items():
+            for slot in ('morning', 'afternoon'):
+                if slot in day and day[slot].get('picks'):
+                    v = kronos_daily_pick.verify(slot, d)
+                    if v:
+                        done.append('%s %s' % (d, slot))
+        return jsonify({'ok': True, 'msg': '已验证 %d 场' % len(done) if done else '暂无可验证记录'})
+
+    # 后台定时：10:00 / 14:35 生成，收盘 / 次日开盘验证
+    kronos_daily_pick.start_scheduler()
+    DAILY_PICK_AVAILABLE = True
+except Exception as _dp_err:
+    DAILY_PICK_AVAILABLE = False
+    print(f"Warning: daily-pick subsystem unavailable: {_dp_err}")
+
+
 if __name__ == '__main__':
     print("Starting Kronos Web UI...")
     print(f"Model availability: {MODEL_AVAILABLE}")

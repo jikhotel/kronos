@@ -149,13 +149,19 @@ def get_spot(refresh=False, deadline_sec=55):
             })
         if time.time() - start_ts > deadline_sec:
             break
-    if len(rows) > 100:
+    # 只有抓取足够完整（>= 2000 只）才落缓存，避免限流时的部分页（如 600 只跌幅榜）
+    # 覆盖掉之前完整的好缓存。残缺结果仍返回给调用方参考，但不污染缓存。
+    if len(rows) >= 2000:
         out = {"source": "eastmoney", "updated_at": _now(), "count": len(rows), "rows": rows}
         try:
             json.dump({**out, "saved_at": time.time()}, open(SPOT_CACHE, "w", encoding="utf-8"), ensure_ascii=False)
         except Exception:
             pass
         return out
+    if len(rows) > 100:
+        # 保留旧缓存，仅返回本次的残缺结果并标注
+        return {"source": "partial", "updated_at": _now(), "count": len(rows), "rows": rows,
+                "note": "本次仅抓到 %d 只（可能被限流），已保留上次完整缓存" % len(rows)}
     return {"source": "none", "updated_at": _now(), "count": len(rows), "rows": rows,
             "note": "全A行情获取失败（东财接口不可用或超时），请稍后刷新"}
 

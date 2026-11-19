@@ -2,11 +2,22 @@
 
   <h2><b>Kronos-WebUI 本地增强版</b></h2>
 
-  <img src="https://img.shields.io/badge/version-1.10.2-blue" alt="v1.10.2">
+  <img src="https://img.shields.io/badge/version-1.11.0-blue" alt="v1.11.0">
   <img src="https://img.shields.io/badge/platform-macOS%20CPU-lightgrey" alt="platform">
   <img src="https://img.shields.io/badge/stocks-A%E8%82%A1%20%2B%20%E6%B8%AF%E8%82%A1-red" alt="A+HK">
 
 </div>
+
+## 🚀 v1.11.0 版本说明（2026-11-19）
+
+**每日推荐：双时段策略 + 自动验证 + 滚动成功率**
+
+1. `webui/daily_pick.py`（新增）：上午 10:00 依据开盘表现选 10 只（当日收盘价验证）、尾盘 14:35 选 10 只（次日开盘价验证），多因子打分，JSON 持久化，历史不丢。
+2. 三级数据回退（东财实时 → 完整缓存 → 腾讯全市场批量报价），过滤开盘跳空异常；东财限流时推荐照常生成。
+3. `webui/stock_data.py`：修复缓存污染 bug——仅当抓取 ≥2000 只才落缓存，避免限流时 600 只残缺结果覆盖完整快照。
+4. `webui/app.py` + `home.html` + 新增 `daily_pick.html`：`/daily-pick` 页面与 4 个 API，首页加入口；后台线程定时生成/验证，页面加载自动补做。
+
+---
 
 ## 🚀 v1.10.2 版本说明（2026-11-18）
 

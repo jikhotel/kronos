@@ -55,6 +55,8 @@ body {
 .card.quant h2 .arrow { color: #3fb950; }
 .card.screener:hover { border-color: #e3a008; box-shadow: 0 12px 40px rgba(227,160,8,.20); }
 .card.screener h2 .arrow { color: #e3a008; }
+.card.daily:hover { border-color: #a371f7; box-shadow: 0 12px 40px rgba(163,113,247,.20); }
+.card.daily h2 .arrow { color: #a371f7; }
 
 .status-bar {
   margin-top: 48px; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
@@ -94,7 +96,7 @@ footer { margin-top: 34px; color: #484f58; font-size: 12px; }
       <span class="badge hl">全程本地运行</span>
       <span class="badge">A股 + 港股</span>
       <span class="badge">CPU 推理</span>
-      <span class="badge">v1.10.2</span>
+      <span class="badge">v1.11.0</span>
     </div>
   </div>
 
@@ -146,6 +148,16 @@ footer { margin-top: 34px; color: #484f58; font-size: 12px; }
       <div class="tags">
         <span class="tag">净买额</span><span class="tag">上榜原因</span>
         <span class="tag">后N日表现</span><span class="tag">东财数据</span>
+      </div>
+    </a>
+
+    <a class="card daily" href="/daily-pick">
+      <div class="icon">🎯</div>
+      <h2>每日推荐 <span class="arrow">→</span></h2>
+      <p>双时段策略：上午 10:00 依据开盘表现选 10 只、当日收盘验证；尾盘 14:35 选 10 只、次日开盘验证。滚动统计每场成功率并自动留痕。</p>
+      <div class="tags">
+        <span class="tag">10点选股</span><span class="tag">尾盘选股</span>
+        <span class="tag">收盘验证</span><span class="tag">成功率追踪</span>
       </div>
     </a>
   </div>
