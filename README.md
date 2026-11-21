@@ -2,11 +2,22 @@
 
   <h2><b>Kronos-WebUI 本地增强版</b></h2>
 
-  <img src="https://img.shields.io/badge/version-1.11.0-blue" alt="v1.11.0">
+  <img src="https://img.shields.io/badge/version-1.12.0-blue" alt="v1.12.0">
   <img src="https://img.shields.io/badge/platform-macOS%20CPU-lightgrey" alt="platform">
   <img src="https://img.shields.io/badge/stocks-A%E8%82%A1%20%2B%20%E6%B8%AF%E8%82%A1-red" alt="A+HK">
 
 </div>
+
+## 🚀 v1.12.0 版本说明（2026-11-21）
+
+**行情数据更新 + 项目导引体系 + 内核版本核验**
+
+1. 全量刷新 154 只 A 股/港股日线 K 线至 11-20 收盘（东财限流期间用腾讯行情兜底重建选股快照与实时缓存，5423 只）。
+2. 新增项目导引文件 `CONTEXT.md`（无上下文/换模型时的 single source of truth）与加密凭据库 `tools/get_secret.py`；明文密码/token 全部移出仓库。
+3. `deploy_cloud.py` 支持从加密凭据库读取 WinRM 密码，云端部署进一步自动化。
+4. 核验模型内核与上游 `shiyu-coder/Kronos` 最新稳定版（master `67b630e`）逐字节一致，无需更新。
+
+---
 
 ## 🚀 v1.11.0 版本说明（2026-11-19）
 

@@ -4,7 +4,7 @@
 > 本文件固化了项目的全貌、路径、登录与部署方式、功能清单、踩坑与修复记录。
 > **不含任何明文密码 / token** —— 所有凭据加密存放在项目之外，通过 `tools/get_secret.py` 读取。
 >
-> 最后更新：2026-11-21 · 当前版本：**v1.11.0**
+> 最后更新：2026-11-21 · 当前版本：**v1.12.0**
 
 ---
 
@@ -34,7 +34,7 @@
 | GitHub 仓库 | `jikhotel/kronos`（public，main 分支） |
 | 本地 WebUI | `http://localhost:7070`（管理员账号沿用历史 admin） |
 | 云端 WebUI | `http://123.207.186.241`（80 端口，Windows Server 2022） |
-| 当前版本 | v1.11.0（已推送 GitHub + 已部署云端） |
+| 当前版本 | v1.12.0（已推送 GitHub；云端仍停在 v1.11.0，未部署） |
 
 **版本演进**：v1.7(9月) → v1.8(量化挖掘产物) → v1.9(当日看板+龙虎榜) → v1.10(分时弹窗/智能选股修复) → **v1.11(每日推荐)**
 
@@ -91,7 +91,7 @@
 | `start_webui.sh` | 去掉硬编码 `/Users/ccb/dev/Kronos`，脚本目录自适应 + Python 回退 | 跨机器路径 |
 | `fetch_stock_kline.py` | 加 `from __future__ import annotations` | 兼容 3.9 的 `str \| None` 注解 |
 | `webui/auth.py` | 密码哈希显式用 PBKDF2-SHA256 | LibreSSL 缺 `hashlib.scrypt` |
-| `run_local.py` | 本机后台启动器（脱离会话） | 沙盒内长驻进程会被回收 |
+| `run_local.py` | 本机后台启动器（脱离会话）+ 启动前清理沙盒 shim 注入 | 沙盒内长驻进程会被回收；继承 shim 的 sitecustomize 会导致登录后读模板报 `_BrokerProtocolError`（见 §6.5） |
 
 > 这些文件在 `git status` 里是未提交状态，**是正常的**，不要误提交。云端是 Windows+新 OpenSSL，推上去会破坏线上鉴权。
 
@@ -182,6 +182,20 @@ python3 /Users/ccb/WorkBuddy/kronos-1.10/deploy_cloud.py --status
 - 沙盒内长驻服务会被回收；持久化进程需在真实 macOS 终端启动（或用 run_local.py 脱离会话）。
 - git 拉取同名未跟踪文件冲突 → 移动备份→合并→逐字节比对（历史备份在 /tmp/kronos-1.8/1.9-preexisting）。
 
+### 6.5 登录后首页 500：`_BrokerProtocolError`（2026-11-21 修复）
+- **现象**：登录 POST 302 成功，跳转到首页渲染 `home.html` 时 500；traceback 落在 `jinja2/loaders.py get_source` → `sandbox-center-runtime-kit/shim/sitecustomize.py _brokered_builtin_open` → `_BrokerProtocolError: execution attempt 不存在或已关闭`。重启后短暂恢复、随后复发（曾误判为偶发）。
+- **根因**：WorkBuddy 沙盒通过 `PYTHONPATH` 注入 shim 的 `sitecustomize.py`，它把内置 `open()` 换成经 broker 转发的版本。`run_local.py` 在沙盒内启动后台服务时继承了这些变量；工具会话（`CODEBUDDY_SANDBOX_BROKER_EXECUTION_ATTEMPT_ID`）过期后 broker 拒绝请求，Jinja2 一读模板就抛错。**不是业务代码或模板本身的问题**，重启只是刷新了 broker 会话。
+- **修复**：`run_local.py` 新增 `sanitize_sandbox_env()`，在 double-fork 后、exec 前调用：剔除 `PYTHONPATH` 中的 shim 路径、设 `PYTHONNOUSERSITE=1`、删除所有 `SANDBOX*`/`BROKER*` 会话变量与 `BASH_ENV`/`NODE_OPTIONS`、从 `PATH` 移除 shim 包装目录；保留抓行情需要的 `HTTP(S)_PROXY`/`ALL_PROXY`。验证过清理后 venv Python 的 sitecustomize 为 `<none>`。
+- **验证标准**：`/login` 200；admin 登录 302；`/`、`/account`、`/daily-pick`、`/dashboard`、`/api/daily-pick/state` 全 200 且无错误关键词；**换个 broker 会话再取首页仍 200**；日志中最后一条错误行号早于本次启动标记行号。
+- **诊断命令**：`env \| grep -iE 'sandbox\|shim\|broker\|PYTHONPATH'`；`python3 -c "import sitecustomize; print(sitecustomize.__file__)"`；清理后复查应为 `<none>`。
+
+### 6.6 上游内核版本核验（2026-11-21）
+- 用户要求"把项目引用的 Kronos 内核更新到 GitHub 最新稳定版"。核验结论：**本地内核已是最新，无需更新**。
+- 上游 `shiyu-coder/Kronos` **无正式 release/tag**（releases/latest 返回 404）；最新即 master 分支 `67b630e`（2026-04-13，修复 batch 维度/归一化数据泄漏/topk 调用）。
+- 用 git blob SHA 逐一比对本地内核文件与上游 master：model/（kronos.py=`ce4494ee`、module.py=`f2a05158`、`__init__.py`=`718d07a`）、finetune/、finetune_csv/、examples/、tests/、requirements.txt（`598a3ded`）**全部一致**。
+- 本地 fork 基线 `3f2db5d`（2026-09-11）晚于上游最后提交，时间上无遗漏。
+- "内核"界定：model/、finetune/、finetune_csv/、examples/、tests/、requirements.txt；**不含**用户自改的 webui/、quant/、bridge/、data/。切勿用上游这些目录覆盖用户的 UI/改动。
+
 ---
 
 ## 7. 凭据库结构与安全约定
@@ -192,7 +206,7 @@ python3 /Users/ccb/WorkBuddy/kronos-1.10/deploy_cloud.py --status
 | 主密钥 | `~/.config/kronos/.key` | 32 字节随机，权限 600，**绝不进项目/对话** |
 | 读取工具 | `tools/get_secret.py` | `keys` 列键名 / `get <key>` 取值 / `env` 输出 export |
 | 键 | 说明 | winrm_password, github_token, webui_admin_password, github_owner, github_repo, cloud_host, cloud_user, cloud_port |
-| WebUI admin 密码 | `python3 tools/get_secret.py get webui_admin_password` 读取 | 2026-11-21 重置为 16 位强密码，旧密码已失效 |
+| WebUI admin 密码 | `python3 tools/get_secret.py get webui_admin_password` 读取 | 2026-11-21 已重置，**以加密库当前值为准**（本文不记明文）；登录页底部可进 `/account` 自行改密 |
 
 **铁律**：
 1. 明文密码/token 不写进 CONTEXT.md、不写进任何 git 跟踪文件、不回显到对话。
@@ -204,9 +218,10 @@ python3 /Users/ccb/WorkBuddy/kronos-1.10/deploy_cloud.py --status
 
 ## 8. 当前状态快照（2026-11-21）
 
-- GitHub：main `539b12e`，tag `v1.11.0`，业务代码 10 文件已推；本机 4 补丁未推（正常）。
-- 云端：`VERSION=1.11.0`，daily_pick 已部署，`/healthz`/`/login`/`/daily-pick` 200，线上数据完好。
-- 本地服务：正常（kronos-1.10 目录，7070）。
+- GitHub：v1.12.0 已推送 main + tag（含 154 只行情 CSV 刷新 + 版本标识 + 导引体系）；本机 5 补丁未推（正常）。
+- 云端：仍 `VERSION=1.11.0`，**本次未部署 v1.12.0**（如需上线执行 `python3 deploy_cloud.py`）；线上数据完好。
+- 上游内核：已核验与 `shiyu-coder/Kronos` master `67b630e` 逐字节一致，无需更新（§6.6）。
+- 本地服务：正常（kronos-1.10 目录，7070）；已根治登录后 `_BrokerProtocolError`（§6.5），`run_local.py` 启动前清理沙盒注入。
 - 今日推荐：上午场 10 只（10:17 生成）、尾盘场 10 只（14:43 生成），落 `webui/cache/daily_picks.json`。
 
 ---
