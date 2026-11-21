@@ -191,7 +191,8 @@ python3 /Users/ccb/WorkBuddy/kronos-1.10/deploy_cloud.py --status
 | 密文库 | `~/.config/kronos/secrets.enc` | AES-256-CBC + PBKDF2 + base64，权限 600 |
 | 主密钥 | `~/.config/kronos/.key` | 32 字节随机，权限 600，**绝不进项目/对话** |
 | 读取工具 | `tools/get_secret.py` | `keys` 列键名 / `get <key>` 取值 / `env` 输出 export |
-| 键 | 说明 | winrm_password, github_token, github_owner, github_repo, cloud_host, cloud_user, cloud_port |
+| 键 | 说明 | winrm_password, github_token, webui_admin_password, github_owner, github_repo, cloud_host, cloud_user, cloud_port |
+| WebUI admin 密码 | `python3 tools/get_secret.py get webui_admin_password` 读取 | 2026-11-21 重置为 16 位强密码，旧密码已失效 |
 
 **铁律**：
 1. 明文密码/token 不写进 CONTEXT.md、不写进任何 git 跟踪文件、不回显到对话。
