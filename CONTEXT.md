@@ -138,7 +138,7 @@ python3 /Users/ccb/WorkBuddy/kronos-1.10/deploy_cloud.py
 python3 /Users/ccb/WorkBuddy/kronos-1.10/deploy_cloud.py v1.12.0
 python3 /Users/ccb/WorkBuddy/kronos-1.10/deploy_cloud.py --status
 ```
-`deploy_cloud.py` 通过 WinRM 后台触发云端 `deploy_cloud.ps1 -Tag <tag>`，轮询到完成（见 §5.3）。
+`deploy_cloud.py` 通过 WinRM 后台触发云端 `deploy_cloud.ps1 -Tag <tag>`，轮询到完成（见 §5.4）。
 
 ### 5.2 底层机制（deploy_cloud.py 依赖）
 - WinRM 客户端：`pypsrp`，来自数据项目 vendor `/Users/ccb/WorkBuddy/数据/all-cities-leads/deploy/vendor`。
@@ -146,7 +146,15 @@ python3 /Users/ccb/WorkBuddy/kronos-1.10/deploy_cloud.py --status
 - WinRM 请求前必须清所有代理 env + `NO_PROXY=*`，否则 403。
 - 云端 `deploy_cloud.ps1` 从 GitHub tag 拉 zip（codeload 优先），校验完整性后替换，保留线上数据。
 
-### 5.3 ⚠️ 部署关键坑
+### 5.3 云端侧现状与前提（2026-11-21 实测）
+- 云端 `C:\kronos\deploy_cloud.ps1` 存在、`webui\app.py` 在，`VERSION=1.11.0`。
+- **自启动靠计划任务 `Kronos WebUI`**（非注册表开机启动）——重启后服务由它拉起。
+  若云端重启后 7070/80 无服务，先查该计划任务是否被禁用；
+  部署时 `deploy_cloud.ps1 -InstallAutostart` 会确保它注册好。
+- 实测服务状态：app.py 进程 2 个、80 端口监听中、`/healthz` 200。
+- 部署通道实测可用：本机 `python3 deploy_cloud.py --status` 能真实连上并返回云端状态。
+
+### 5.4 ⚠️ 部署关键坑
 - **不要同步执行** deploy_cloud.ps1：WinRM 长连接会被工具超时杀掉（exit 137），但云端进程还在跑 → 用后台 `Start-Process` 触发（deploy_cloud.py 已封装）。
 - 线上数据**绝不覆盖**：`users.db` / `.secret_key` / `quant.db` / `screener_data.json` / `prediction_results` / `cache` 全保留。
 - 若 clone 时提示 "untracked working tree files would be overwritten"：把已落在工作区的同名文件**移动备份**再 merge，逐字节比对，勿直接删。
